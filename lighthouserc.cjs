@@ -21,7 +21,8 @@ module.exports = {
         'categories:performance': ['error', { minScore: 0.9 }],
         'categories:accessibility': ['error', { minScore: 0.9 }],
         'categories:best-practices': ['warn', { minScore: 0.9 }],
-        'categories:seo': ['warn', { minScore: 0.9 }],
+        // Admin is intentionally noindex; public SEO is covered by tests/public/seo.spec.ts.
+        'categories:seo': 'off',
         'largest-contentful-paint': ['error', { maxNumericValue: 2500 }],
         'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],
         'total-blocking-time': ['warn', { maxNumericValue: 200 }],

@@ -5,16 +5,31 @@ interface Props {
   title: string;
   description?: string;
   label?: string;
+  canonical?: string;
+  image?: string;
+  imageAlt?: string;
+  noindex?: boolean;
 }
 
 const {
   title,
   description,
   label,
+  canonical,
+  image,
+  imageAlt,
+  noindex,
 } = Astro.props;
 ---
 
-<PublicLayout title={`${title} — Tosder Communities`}>
+<PublicLayout
+  title={`${title} — Tosder Communities`}
+  description={description}
+  canonical={canonical}
+  image={image}
+  imageAlt={imageAlt}
+  noindex={noindex}
+>
   <section class="page">
     <div class="container">
       <header class="page-header">

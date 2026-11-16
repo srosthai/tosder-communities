@@ -61,6 +61,8 @@ const activeFilters = Boolean(q || province || category || sort !== 'recommended
   label="Explore"
   title="Find a place worth the detour."
   description="Search Cambodia's provinces and destinations, then start with a place that fits the trip you are planning."
+  canonical="/explore"
+  noindex={activeFilters}
 >
   <form class="explore-filters" method="get" action="/explore" data-explore-filters>
     <label class="explore-search">

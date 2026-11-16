@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#27272a" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#09090b" stop-opacity="0"/>
+      <stop offset="1" stop-color="#09090b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#09090b"/>
+  <rect width="1200" height="630" fill="url(#grid)" opacity=".55"/>
+  <rect y="430" width="1200" height="200" fill="url(#fade)"/>
+  <circle cx="1020" cy="120" r="54" fill="#a3e635" opacity=".9"/>
+  <text x="80" y="120" fill="#fafafa" font-family="DejaVu Sans, sans-serif" font-size="34" font-weight="bold">Tosder Communities</text>
+  <text x="80" y="300" fill="#fafafa" font-family="DejaVu Sans, sans-serif" font-size="112" font-weight="bold" letter-spacing="-4">Cambodia,</text>
+  <text x="80" y="420" fill="#fafafa" font-family="DejaVu Sans, sans-serif" font-size="112" font-weight="bold" letter-spacing="-4">planned well.</text>
+  <text x="84" y="490" fill="#a1a1aa" font-family="DejaVu Sans, sans-serif" font-size="28">Discover places. Copy a plan. Make it yours.</text>
+  <g fill="#a3e635">
+    <circle cx="900" cy="420" r="7"/>
+    <circle cx="980" cy="380" r="7"/>
+    <circle cx="1060" cy="430" r="7"/>
+  </g>
+  <path d="M900 420 980 380 1060 430" fill="none" stroke="#a3e635" stroke-width="3" stroke-dasharray="8 8"/>
+</svg>

@@ -28,12 +28,43 @@ const coords =
   destination?.latitude != null && destination.longitude != null
     ? `${destination.latitude.toFixed(4)}, ${destination.longitude.toFixed(4)}`
     : null;
+
+const canonicalPath = destination ? `/destinations/${destination.slug}` : undefined;
+const destinationJsonLd = destination
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'TouristAttraction',
+      name: destination.name,
+      description: destination.description ?? destination.summary ?? undefined,
+      url: canonicalPath ? new URL(canonicalPath, Astro.url.origin).toString() : undefined,
+      image: new URL('/image/og-default.png', Astro.url.origin).toString(),
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: destination.province,
+        addressCountry: 'KH',
+      },
+      ...(destination.latitude != null && destination.longitude != null
+        ? {
+            geo: {
+              '@type': 'GeoCoordinates',
+              latitude: destination.latitude,
+              longitude: destination.longitude,
+            },
+          }
+        : {}),
+    }
+  : undefined;
 ---
 
 {destination ? (
   <PublicLayout
     title={`${destination.name} — Tosder Communities`}
     description={destination.summary ?? `Discover ${destination.name} in ${destination.province}, Cambodia.`}
+    canonical={canonicalPath}
+    image="/image/og-default.png"
+    imageAlt={`${destination.name}, ${destination.province}, Cambodia`}
+    type="article"
+    jsonLd={destinationJsonLd}
   >
     <article class="destination-page">
       <div class="container">
@@ -144,7 +175,7 @@ const coords =
     </article>
   </PublicLayout>
 ) : (
-  <PublicLayout title="Destination not found — Tosder Communities">
+  <PublicLayout title="Destination not found — Tosder Communities" noindex>
     <section class="not-found">
       <div class="container">
         <p class="label">Error 404</p>
