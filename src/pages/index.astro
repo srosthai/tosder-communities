@@ -1,0 +1,189 @@
+---
+import { getSupabase } from '../db/supabase';
+
+interface Todo {
+  id: string;
+  name: string;
+}
+
+let todos: Todo[] = [];
+let errorMessage: string | null = null;
+let connected = false;
+
+try {
+  const supabase = getSupabase();
+  connected = true;
+
+  const { data, error } = await supabase
+    .from('todos')
+    .select('id, name')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    errorMessage =
+      error.code === 'PGRST205'
+        ? 'Supabase is reachable, but the todos table does not exist yet. Apply the initial Prisma migration to finish the connection.'
+        : error.message;
+  } else {
+    todos = (data ?? []) as Todo[];
+  }
+} catch (error) {
+  errorMessage =
+    error instanceof Error ? error.message : 'Unable to connect to Supabase.';
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tosder Communities — Backend check</title>
+    <meta
+      name="description"
+      content="Backend connection check for the Tosder Communities platform."
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #ffffff;
+        color: #111111;
+      }
+
+      main {
+        width: min(100% - 48px, 680px);
+        margin: 0 auto;
+        padding: clamp(64px, 12vh, 128px) 0;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 20px;
+        padding: 6px 10px;
+        border: 1px solid #e5e5e5;
+        border-radius: 999px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: #555555;
+      }
+
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #16a34a;
+      }
+
+      .dot.offline {
+        background: #dc2626;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: clamp(2rem, 6vw, 3.25rem);
+        line-height: 1;
+        letter-spacing: -0.045em;
+        font-weight: 600;
+      }
+
+      p {
+        margin: 0 0 16px;
+        font-size: 16px;
+        line-height: 1.6;
+        color: #555555;
+      }
+
+      ul {
+        margin: 32px 0;
+        padding: 0;
+        list-style: none;
+        border-top: 1px solid #e5e5e5;
+      }
+
+      li {
+        padding: 14px 0;
+        border-bottom: 1px solid #e5e5e5;
+        font-size: 15px;
+        color: #111111;
+      }
+
+      .notice {
+        margin: 32px 0;
+        padding: 16px;
+        border: 1px solid #e5e5e5;
+        border-radius: 8px;
+        background: #fafafa;
+        color: #444444;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      nav {
+        display: flex;
+        gap: 20px;
+        margin-top: 40px;
+        font-size: 14px;
+      }
+
+      a {
+        color: #111111;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      a:hover {
+        text-decoration-thickness: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="status">
+        <span class:list={['dot', { offline: !connected }]}></span>
+        {connected ? 'Supabase connected' : 'Supabase not ready'}
+      </p>
+
+      <h1>Tosder Communities</h1>
+      <p>
+        Backend connection check. This page reads the temporary <code>todos</code>
+        table to verify the Supabase and Prisma setup.
+      </p>
+
+      {
+        errorMessage ? (
+          <p class="notice">{errorMessage}</p>
+        ) : todos.length === 0 ? (
+          <p class="notice">
+            The connection works. Add a row to the <code>todos</code> table to see
+            it here.
+          </p>
+        ) : (
+          <ul>
+            {todos.map((todo) => (
+              <li>{todo.name}</li>
+            ))}
+          </ul>
+        )
+      }
+
+      <nav>
+        <a href="/api/health">API health</a>
+        <a href="/api/todos">Todos API</a>
+      </nav>
+    </main>
+  </body>
+</html>
