@@ -8,6 +8,12 @@ interface Props {
   theme?: 'light' | 'dark';
   surface?: 'public' | 'admin';
   bodyClass?: string;
+  canonical?: string;
+  image?: string;
+  imageAlt?: string;
+  noindex?: boolean;
+  type?: 'website' | 'article';
+  jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
 const {
@@ -16,9 +22,20 @@ const {
   theme = 'light',
   surface = 'public',
   bodyClass,
+  canonical,
+  image = '/image/og-default.png',
+  imageAlt,
+  noindex = false,
+  type = 'website',
+  jsonLd,
 } = Astro.props;
 
+const siteName = 'Tosder Communities';
+const canonicalUrl = new URL(canonical ?? Astro.url.pathname, Astro.url.origin).toString();
+const imageUrl = new URL(image, Astro.url.origin).toString();
 const themeColor = theme === 'dark' ? '#141417' : '#ffffff';
+const robots = noindex ? 'noindex, nofollow' : 'index, follow';
+const jsonLdString = jsonLd ? JSON.stringify(jsonLd) : null;
 ---
 
 <!doctype html>
@@ -33,7 +50,21 @@ const themeColor = theme === 'dark' ? '#141417' : '#ffffff';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content={themeColor} />
     <meta name="description" content={description} />
+    <meta name="robots" content={robots} />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:alt" content={imageAlt ?? title} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageUrl} />
     <title>{title}</title>
+    {jsonLdString && <script type="application/ld+json" set:html={jsonLdString} />}
     <script is:inline>
       (() => {
         try {

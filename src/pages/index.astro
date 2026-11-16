@@ -40,6 +40,21 @@ interface CollectionCard {
   destinations: string[];
 }
 
+const origin = Astro.url.origin;
+const homeJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Tosder Communities',
+  url: new URL('/', origin).toString(),
+  description:
+    'Discover Cambodia, create reusable itineraries, and share travel templates.',
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: `${origin}/explore?q={search_term_string}`,
+    'query-input': 'required name=search_term_string',
+  },
+};
+
 let destinations: DestinationCard[] = [];
 let collections: CollectionCard[] = [];
 
@@ -101,7 +116,13 @@ try {
 }
 ---
 
-<PublicLayout title="Tosder Communities — Cambodia travel, planned well">
+<PublicLayout
+  title="Tosder Communities — Cambodia travel, planned well"
+  canonical="/"
+  image="/image/og-default.png"
+  imageAlt="Tosder Communities — Cambodia travel, planned by people who have been there."
+  jsonLd={homeJsonLd}
+>
   <section class="hero">
     <div class="container hero__grid">
       <div class="hero__copy">

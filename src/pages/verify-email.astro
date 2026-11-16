@@ -66,6 +66,7 @@ if (Astro.request.method === 'POST') {
   label="Account"
   title="Verify your email"
   description="Verification is required before publishing a template. Browsing and saving do not require it."
+  noindex
 >
   <AuthCard error={errorMessage}>
     {sent && (

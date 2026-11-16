@@ -8,12 +8,24 @@ interface Props {
   title: string;
   description?: string;
   user?: { name: string; initials?: string } | null;
+  canonical?: string;
+  image?: string;
+  imageAlt?: string;
+  noindex?: boolean;
+  type?: 'website' | 'article';
+  jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
 const {
   title,
   description = 'Discover Cambodia, create reusable itineraries, and share travel templates.',
   user: providedUser = null,
+  canonical,
+  image,
+  imageAlt,
+  noindex,
+  type,
+  jsonLd,
 } = Astro.props;
 
 const cookieHeader = Astro.request.headers.get('cookie') ?? '';
@@ -47,7 +59,17 @@ const navItems = [
 ];
 ---
 
-<BaseLayout title={title} description={description} surface="public">
+<BaseLayout
+  title={title}
+  description={description}
+  surface="public"
+  canonical={canonical}
+  image={image}
+  imageAlt={imageAlt}
+  noindex={noindex}
+  type={type}
+  jsonLd={jsonLd}
+>
   <a class="skip-link" href="#main-content">Skip to content</a>
 
   <header class="site-header">
