@@ -1,0 +1,89 @@
+---
+import type { DestinationCardData } from '../../lib/destinations';
+
+interface Props {
+  destination: DestinationCardData;
+}
+
+const { destination } = Astro.props;
+---
+
+<a class="destination-card" href={`/explore?destination=${destination.slug}`}>
+  <span class="destination-card__media">
+    <img
+      src={destination.image}
+      alt={destination.alt}
+      width="800"
+      height="600"
+      loading="lazy"
+      decoding="async"
+    />
+  </span>
+  <span class="destination-card__body">
+    <span class="destination-card__meta">
+      <span>{destination.province}</span>
+      {destination.category && <span>{destination.category}</span>}
+    </span>
+    <strong>{destination.name}</strong>
+    {destination.summary && <span class="destination-card__summary">{destination.summary}</span>}
+  </span>
+</a>
+
+<style>
+  .destination-card {
+    display: flex;
+    flex-direction: column;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    overflow: hidden;
+    transition:
+      border-color var(--duration-fast) var(--ease-standard),
+      transform var(--duration-fast) var(--ease-standard);
+  }
+
+  .destination-card:hover {
+    border-color: var(--color-border-strong);
+    transform: translateY(-2px);
+  }
+
+  .destination-card__media {
+    display: block;
+    aspect-ratio: 4 / 3;
+    background: var(--color-surface-sunken);
+    overflow: hidden;
+  }
+
+  .destination-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .destination-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+  }
+
+  .destination-card__meta {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .destination-card__body strong {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.015em;
+  }
+
+  .destination-card__summary {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+</style>
