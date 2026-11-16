@@ -1,0 +1,126 @@
+---
+import { Download, RefreshCw, ScrollText } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import DataTable from '../../components/admin/DataTable.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+
+const events = [
+  { time: '15:42:18', actor: 'Thai Sros', action: 'Reward approved', kind: 'Reward', entity: 'Vannak Heng · October 2026', change: 'pending → approved', request: 'req_8f2a1c' },
+  { time: '15:36:04', actor: 'Ratha Keo', action: 'Template hidden', kind: 'Moderation', entity: 'Kampot slow weekend', change: 'published → hidden', request: 'req_7d1b93' },
+  { time: '15:21:47', actor: 'System', action: 'Ranking snapshot', kind: 'Competition', entity: 'November 2026', change: 'provisional snapshot', request: 'job_4b91e2' },
+  { time: '14:58:12', actor: 'Thai Sros', action: 'Role granted', kind: 'Access', entity: 'Vannak Heng', change: 'creator → trusted creator', request: 'req_2c7a11' },
+  { time: '14:30:55', actor: 'Dara Lim', action: 'Template submitted', kind: 'Content', entity: 'Kampot slow weekend', change: 'draft → pending review', request: 'req_9a0f42' },
+  { time: '13:12:09', actor: 'Ratha Keo', action: 'Report dismissed', kind: 'Moderation', entity: 'RPT-1034', change: 'open → dismissed', request: 'req_5e8c14' },
+  { time: '12:04:31', actor: 'System', action: 'Qualified use invalidated', kind: 'Analytics', entity: 'Sokha Meas · template 184', change: 'qualified → invalid', request: 'job_1f3d77' },
+  { time: '11:47:02', actor: 'Thai Sros', action: 'Competition updated', kind: 'Competition', entity: 'November 2026', change: 'prize pool $450 → $500', request: 'req_6b2e90' },
+  { time: '11:20:44', actor: 'Sovann Reach', action: 'Review hidden', kind: 'Moderation', entity: 'Review on Koh Rong dive', change: 'visible → hidden', request: 'req_4a1d62' },
+  { time: '10:58:10', actor: 'Thai Sros', action: 'Payout recorded', kind: 'Reward', entity: 'Sokha Meas · October 2026', change: 'payable → paid', request: 'req_3e9b28' },
+  { time: '10:31:37', actor: 'System', action: 'Competition closed', kind: 'Competition', entity: 'October 2026', change: 'active → closed', request: 'job_8c2f51' },
+  { time: '09:45:03', actor: 'Malis Chhay', action: 'Profile updated', kind: 'Account', entity: 'Malis Chhay', change: 'bio and links', request: 'req_1d7a90' },
+];
+
+const kindVariant = (kind: string) =>
+  kind === 'Moderation'
+    ? 'warning'
+    : kind === 'Reward'
+      ? 'success'
+      : kind === 'Access'
+        ? 'info'
+        : 'neutral';
+---
+
+<AdminLayout title="Audit">
+  <DataTable
+    title="Audit log"
+    description="An append-only record of moderation, competition, ranking, access, and payout actions."
+    searchPlaceholder="Search actor, entity, or request ID…"
+    filters={[
+      { label: 'Moderation', value: 'moderation' },
+      { label: 'Competition', value: 'competition' },
+      { label: 'Reward', value: 'reward' },
+      { label: 'Access', value: 'access' },
+      { label: 'Content', value: 'content' },
+    ]}
+  >
+    <ScrollText slot="icon" size={18} stroke-width={1.75} />
+    <Fragment slot="actions">
+      <Button variant="ghost" size="sm">
+        <RefreshCw size={14} stroke-width={1.75} />
+        Refresh
+      </Button>
+      <Button variant="secondary" size="sm">
+        <Download size={14} stroke-width={1.75} />
+        Export
+      </Button>
+    </Fragment>
+
+    <thead>
+      <tr>
+        <th scope="col">Time</th>
+        <th scope="col">Actor</th>
+        <th scope="col">Action</th>
+        <th scope="col">Entity</th>
+        <th scope="col">Change</th>
+        <th scope="col">Request ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {events.map((event) => (
+        <tr
+          data-search={`${event.time} ${event.actor} ${event.action} ${event.kind} ${event.entity} ${event.request}`}
+          data-filter={event.kind.toLowerCase()}
+        >
+          <td class="mono">{event.time}</td>
+          <td><strong>{event.actor}</strong></td>
+          <td>
+            <span class="action-cell">
+              <Badge variant={kindVariant(event.kind)}>{event.kind}</Badge>
+              <span class="action-label">{event.action}</span>
+            </span>
+          </td>
+          <td class="muted">{event.entity}</td>
+          <td class="mono change">{event.change}</td>
+          <td class="mono muted">{event.request}</td>
+        </tr>
+      ))}
+    </tbody>
+  </DataTable>
+
+  <p class="page-note">Entries cannot be edited or deleted through the application.</p>
+</AdminLayout>
+
+<style>
+  .mono {
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .muted {
+    color: var(--color-text-muted);
+  }
+
+  .change {
+    color: var(--color-text-subtle);
+  }
+
+  .action-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    white-space: nowrap;
+  }
+
+  .action-label {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .page-note {
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+</style>

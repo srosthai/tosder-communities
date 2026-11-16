@@ -1,0 +1,186 @@
+---
+import { ChevronDown, Download, MapPin, Plus } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import DataTable from '../../components/admin/DataTable.astro';
+import SearchableSelect from '../../components/admin/SearchableSelect.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+
+const destinations = [
+  { name: 'Angkor Wat', province: 'Siem Reap', category: 'Temple', status: 'Published', templates: '18', views: '42.1k', updated: '2 hours ago' },
+  { name: 'Kampot riverside', province: 'Kampot', category: 'Town', status: 'Published', templates: '9', views: '12.8k', updated: 'Yesterday' },
+  { name: 'Koh Rong', province: 'Preah Sihanouk', category: 'Island', status: 'Published', templates: '14', views: '28.4k', updated: '2 days ago' },
+  { name: 'Bokor Mountain', province: 'Kampot', category: 'Nature', status: 'Draft', templates: '0', views: '—', updated: '4 days ago' },
+  { name: 'Battambang countryside', province: 'Battambang', category: 'Countryside', status: 'Published', templates: '7', views: '8.2k', updated: '1 week ago' },
+  { name: 'Mondulkiri waterfall trail', province: 'Mondulkiri', category: 'Nature', status: 'Archived', templates: '3', views: '4.1k', updated: '3 weeks ago' },
+  { name: 'Kep crab market', province: 'Kep', category: 'Food', status: 'Published', templates: '5', views: '6.8k', updated: '3 weeks ago' },
+  { name: 'Kratie river dolphins', province: 'Kratie', category: 'Wildlife', status: 'Published', templates: '4', views: '5.2k', updated: '1 month ago' },
+  { name: 'Preah Vihear temple', province: 'Preah Vihear', category: 'Temple', status: 'Draft', templates: '0', views: '—', updated: '1 month ago' },
+  { name: 'Tonle Sap floating villages', province: 'Siem Reap', category: 'Culture', status: 'Published', templates: '11', views: '15.6k', updated: '1 month ago' },
+  { name: 'Banlung crater lake', province: 'Ratanakiri', category: 'Nature', status: 'Published', templates: '6', views: '7.4k', updated: '2 months ago' },
+  { name: 'Sihanoukville Otres beach', province: 'Preah Sihanouk', category: 'Beach', status: 'Archived', templates: '2', views: '3.9k', updated: '2 months ago' },
+];
+
+const statusVariant = (status: string) =>
+  status === 'Published' ? 'success' : status === 'Draft' ? 'neutral' : 'warning';
+---
+
+<AdminLayout title="Content">
+  <DataTable
+    title="Destinations"
+    description="Manage destinations, categories, photography, and public visibility."
+    searchPlaceholder="Search destinations by name or province…"
+    filters={[
+      { label: 'Published', value: 'published' },
+      { label: 'Draft', value: 'draft' },
+      { label: 'Archived', value: 'archived' },
+    ]}
+  >
+    <MapPin slot="icon" size={18} stroke-width={1.75} />
+    <Fragment slot="actions">
+      <Button variant="secondary" size="sm">
+        <Download size={14} stroke-width={1.75} />
+        Import
+      </Button>
+      <Button variant="primary" size="sm">
+        <Plus size={14} stroke-width={2} />
+        New destination
+      </Button>
+    </Fragment>
+
+    <SearchableSelect
+      slot="toolbar"
+      name="province"
+      label="Province"
+      searchPlaceholder="Search provinces…"
+      options={[
+        { value: '', label: 'All provinces' },
+        { value: 'siem-reap', label: 'Siem Reap' },
+        { value: 'kampot', label: 'Kampot' },
+        { value: 'preah-sihanouk', label: 'Preah Sihanouk' },
+        { value: 'battambang', label: 'Battambang' },
+        { value: 'mondulkiri', label: 'Mondulkiri' },
+        { value: 'kep', label: 'Kep' },
+        { value: 'kratie', label: 'Kratie' },
+        { value: 'preah-vihear', label: 'Preah Vihear' },
+        { value: 'ratanakiri', label: 'Ratanakiri' },
+      ]}
+    />
+
+    <thead>
+      <tr>
+        <th scope="col">Destination</th>
+        <th scope="col">Province</th>
+        <th scope="col">Category</th>
+        <th scope="col">Status</th>
+        <th scope="col">Templates</th>
+        <th scope="col">Views</th>
+        <th scope="col">Updated</th>
+        <th scope="col"><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {destinations.map((destination) => (
+        <tr
+          data-search={`${destination.name} ${destination.province} ${destination.category} ${destination.status}`}
+          data-filter={destination.status.toLowerCase()}
+          data-province={destination.province.toLowerCase().replaceAll(' ', '-')}
+        >
+          <td>
+            <span class="cell-main">
+              <span class="cell-icon" aria-hidden="true"><MapPin size={14} stroke-width={1.75} /></span>
+              <span class="cell-copy">
+                <strong>{destination.name}</strong>
+                <span>{destination.category}</span>
+              </span>
+            </span>
+          </td>
+          <td>{destination.province}</td>
+          <td>{destination.category}</td>
+          <td><Badge variant={statusVariant(destination.status)} dot>{destination.status}</Badge></td>
+          <td class="numeric">{destination.templates}</td>
+          <td class="numeric">{destination.views}</td>
+          <td class="muted">{destination.updated}</td>
+          <td class="actions">
+            <a class="table-action" href={`/admin/content?edit=${destination.name.toLowerCase().replaceAll(' ', '-')}`}>
+              Edit <ChevronDown size={12} stroke-width={1.75} />
+            </a>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </DataTable>
+
+  <p class="page-note">Published content is indexable and available to template authors. Archived content keeps its references.</p>
+</AdminLayout>
+
+<style>
+  .cell-main {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 12rem;
+  }
+
+  .cell-icon {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+  }
+
+  .cell-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .cell-copy strong {
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+  }
+
+  .cell-copy span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .muted {
+    color: var(--color-text-muted);
+  }
+
+  .actions {
+    text-align: right;
+  }
+
+  .table-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .table-action:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .page-note {
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+</style>

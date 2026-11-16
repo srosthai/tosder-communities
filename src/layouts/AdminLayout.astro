@@ -1,0 +1,1269 @@
+---
+import {
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Keyboard,
+  LayoutDashboard,
+  LayoutTemplate,
+  LogOut,
+  MapPin,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  ShieldAlert,
+  ScrollText,
+  Sun,
+  Moon,
+  Trophy,
+  User,
+  Users,
+  Wallet,
+} from '@lucide/astro';
+import BaseLayout from './BaseLayout.astro';
+import Button from '../components/ui/Button.astro';
+import Dialog from '../components/ui/Dialog.astro';
+import Kbd from '../components/ui/Kbd.astro';
+import {
+  adminCommands,
+  adminNavGroups,
+  adminShortcuts,
+  breadcrumbFor,
+  canAccess,
+  isActivePath,
+  type AdminIcon,
+  type AdminRole,
+} from '../lib/admin-nav';
+
+interface Props {
+  title: string;
+  role?: AdminRole;
+}
+
+const { title, role = 'administrator' } = Astro.props;
+const pathname = Astro.url.pathname;
+const currentLabel = breadcrumbFor(pathname);
+
+const iconMap: Record<AdminIcon, typeof LayoutDashboard> = {
+  overview: LayoutDashboard,
+  content: MapPin,
+  templates: LayoutTemplate,
+  users: Users,
+  moderation: ShieldAlert,
+  competitions: Trophy,
+  rewards: Wallet,
+  audit: ScrollText,
+};
+
+const groups = adminNavGroups
+  .map((group) => ({
+    ...group,
+    items: group.items.filter((item) => canAccess(role, item)),
+  }))
+  .filter((group) => group.items.length > 0);
+
+const commands = [
+  ...groups.flatMap((group) =>
+    group.items.map((item) => ({
+      label: item.label,
+      group: 'Navigate',
+      href: item.href,
+      keywords: `${item.label} ${group.label}`.toLowerCase(),
+      shortcut: item.shortcut,
+    })),
+  ),
+  ...adminCommands.map((command) => ({
+    ...command,
+    keywords: `${command.label} ${command.keywords}`.toLowerCase(),
+    shortcut: undefined,
+  })),
+];
+---
+
+<BaseLayout
+  title={`${title} — Admin — Tosder Communities`}
+  theme="dark"
+  surface="admin"
+>
+  <a class="skip-link" href="#admin-main">Skip to content</a>
+
+  <div class="admin-shell" data-sidebar="expanded" data-collapsed="false" data-mobile-open="false">
+    <aside class="sidebar" id="admin-sidebar" aria-label="Admin navigation">
+      <div class="sidebar__header">
+        <a class="brand" href="/admin">
+          <span class="brand__mark" aria-hidden="true">T</span>
+          <span class="brand__text">
+            <span class="brand__name">Tosder</span>
+            <span class="brand__badge">Admin</span>
+          </span>
+        </a>
+        <button
+          type="button"
+          class="sidebar__collapse"
+          data-sidebar-collapse
+          aria-label="Collapse sidebar"
+          title="Collapse sidebar"
+        >
+          <PanelLeftClose class="collapse-icon collapse-icon--close" size={15} stroke-width={1.75} />
+          <PanelLeftOpen class="collapse-icon collapse-icon--open" size={15} stroke-width={1.75} />
+        </button>
+      </div>
+
+      <nav class="sidebar__nav" aria-label="Sections">
+        {groups.map((group) => (
+          <div class="nav-group">
+            <p class="nav-group__label">{group.label}</p>
+            <ul class="nav-list">
+              {group.items.map((item) => {
+                const Icon = iconMap[item.icon];
+                const active = isActivePath(pathname, item.href);
+                return (
+                  <li>
+                    <a
+                      class:list={['nav-item', { 'is-active': active }]}
+                      href={item.href}
+                      aria-current={active ? 'page' : undefined}
+                      title={item.label}
+                    >
+                      <Icon size={16} stroke-width={1.75} aria-hidden="true" />
+                      <span class="nav-item__label">{item.label}</span>
+                      {item.badge && <span class="nav-item__badge">{item.badge}</span>}
+                      {item.shortcut && <span class="nav-item__shortcut" aria-hidden="true">{item.shortcut}</span>}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      <div class="sidebar__footer">
+        <a class="nav-item" href="/" target="_blank" rel="noreferrer" title="View public site">
+          <ExternalLink size={16} stroke-width={1.75} aria-hidden="true" />
+          <span class="nav-item__label">View public site</span>
+        </a>
+        <button
+          type="button"
+          class="nav-item"
+          data-shortcuts-open
+          data-dialog-open="shortcuts-dialog"
+          title="Keyboard shortcuts"
+        >
+          <Keyboard size={16} stroke-width={1.75} aria-hidden="true" />
+          <span class="nav-item__label">Keyboard shortcuts</span>
+          <span class="nav-item__shortcut">?</span>
+        </button>
+        <div class="sidebar__user">
+          <span class="avatar">TS</span>
+          <span class="sidebar__user-copy">
+            <strong>Thai Sros</strong>
+            <span>Administrator</span>
+          </span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="admin-main">
+      <header class="topbar">
+        <button
+          type="button"
+          class="topbar__menu"
+          data-mobile-menu
+          aria-label="Open navigation"
+          aria-controls="admin-sidebar"
+          aria-expanded="false"
+        >
+          <Menu size={18} stroke-width={1.75} />
+        </button>
+
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/admin">Admin</a>
+          <ChevronRight size={12} stroke-width={1.75} aria-hidden="true" />
+          <span aria-current="page">{currentLabel}</span>
+        </nav>
+
+        <div class="topbar__actions">
+          <button
+            type="button"
+            class="search-trigger"
+            data-command-open
+            title="Open command palette"
+          >
+            <Search size={14} stroke-width={1.75} aria-hidden="true" />
+            <span class="search-trigger__label">Search</span>
+            <span class="search-trigger__keys" aria-hidden="true">
+              <Kbd>⌘</Kbd><Kbd>K</Kbd>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            class="topbar-icon"
+            data-admin-theme-toggle
+            aria-label="Switch to light theme"
+            title="Switch to light theme"
+          >
+            <Sun class="theme-icon theme-icon--sun" size={16} stroke-width={1.75} />
+            <Moon class="theme-icon theme-icon--moon" size={16} stroke-width={1.75} />
+          </button>
+
+          <button type="button" class="topbar-icon" aria-label="Notifications, 3 unread">
+            <Bell size={16} stroke-width={1.75} />
+            <span class="notification-dot" aria-hidden="true"></span>
+          </button>
+
+          <details class="account">
+            <summary class="account__summary">
+              <span class="avatar">TS</span>
+              <span class="account__name">Thai Sros</span>
+              <ChevronDown size={12} stroke-width={1.75} aria-hidden="true" />
+            </summary>
+            <div class="account__menu">
+              <div class="account__header">
+                <strong>Thai Sros</strong>
+                <span>Administrator</span>
+              </div>
+              <a href="/admin/users">
+                <User size={14} stroke-width={1.75} />
+                Profile
+              </a>
+              <button type="button" data-dialog-open="shortcuts-dialog">
+                <Keyboard size={14} stroke-width={1.75} />
+                Keyboard shortcuts
+              </button>
+              <a href="/" target="_blank" rel="noreferrer">
+                <ExternalLink size={14} stroke-width={1.75} />
+                View public site
+              </a>
+              <button type="button" class="account__danger">
+                <LogOut size={14} stroke-width={1.75} />
+                Sign out
+              </button>
+            </div>
+          </details>
+        </div>
+      </header>
+
+      <main class="admin-content" id="admin-main" tabindex="-1">
+        <slot />
+      </main>
+    </div>
+  </div>
+
+  <div class="mobile-overlay" data-mobile-overlay hidden></div>
+
+  <dialog id="command-palette" class="command-palette" aria-label="Command palette">
+    <div class="command-palette__search">
+      <Search size={16} stroke-width={1.75} aria-hidden="true" />
+      <input
+        id="command-input"
+        type="text"
+        placeholder="Search pages and actions…"
+        autocomplete="off"
+        spellcheck="false"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls="command-list"
+        aria-autocomplete="list"
+        aria-activedescendant={commands.length > 0 ? 'command-0' : undefined}
+      />
+      <Kbd>Esc</Kbd>
+    </div>
+    <div class="command-palette__list" id="command-list" role="listbox" aria-label="Commands">
+      {commands.map((command, index) => (
+        <a
+          id={`command-${index}`}
+          class="command-item"
+          href={command.href}
+          role="option"
+          aria-selected={index === 0 ? 'true' : 'false'}
+          data-command-item
+          data-search={`${command.label} ${command.group} ${command.keywords}`.toLowerCase()}
+        >
+          <span class="command-item__label">{command.label}</span>
+          <span class="command-item__group">{command.group}</span>
+          {command.shortcut && <Kbd>{command.shortcut}</Kbd>}
+        </a>
+      ))}
+      <p class="command-empty" data-command-empty hidden>No commands match.</p>
+    </div>
+    <div class="command-palette__footer">
+      <span class="command-palette__hints">
+        <span>↑↓ navigate</span>
+        <span>↵ open</span>
+        <span>esc close</span>
+      </span>
+      <span class="command-palette__shortcut-hint">
+        All shortcuts <Kbd>?</Kbd>
+      </span>
+    </div>
+  </dialog>
+
+  <Dialog
+    id="shortcuts-dialog"
+    title="Keyboard shortcuts"
+    description="Move through the admin without leaving the keyboard."
+    size="sm"
+  >
+    <div class="shortcut-list">
+      {adminShortcuts.map((shortcut) => (
+        <div class="shortcut-row">
+          <span>{shortcut.label}</span>
+          <span class="shortcut-keys">
+            {shortcut.keys.map((key) => <Kbd>{key}</Kbd>)}
+          </span>
+        </div>
+      ))}
+    </div>
+    <Fragment slot="footer">
+      <Button variant="secondary" size="sm" data-dialog-close>Close</Button>
+    </Fragment>
+  </Dialog>
+
+  <script>
+    const shell = document.querySelector<HTMLElement>('.admin-shell');
+    const sidebar = document.querySelector<HTMLElement>('#admin-sidebar');
+    const collapseButton = document.querySelector<HTMLElement>('[data-sidebar-collapse]');
+    const mobileButton = document.querySelector<HTMLButtonElement>('[data-mobile-menu]');
+    const mobileOverlay = document.querySelector<HTMLElement>('[data-mobile-overlay]');
+    const palette = document.querySelector<HTMLDialogElement>('#command-palette');
+    const input = document.querySelector<HTMLInputElement>('#command-input');
+    const options = Array.from(document.querySelectorAll<HTMLElement>('[data-command-item]'));
+    const empty = document.querySelector<HTMLElement>('[data-command-empty]');
+    let activeIndex = 0;
+    let lastFocused: HTMLElement | null = null;
+    let lastG = 0;
+
+    const isEditable = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.matches('input, textarea, select') || target.isContentEditable);
+
+    const setCollapsed = (collapsed: boolean) => {
+      shell?.setAttribute('data-collapsed', String(collapsed));
+      localStorage.setItem('tosder-admin-sidebar', collapsed ? 'collapsed' : 'expanded');
+      collapseButton?.setAttribute(
+        'aria-label',
+        collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+      );
+    };
+
+    if (localStorage.getItem('tosder-admin-sidebar') === 'collapsed') {
+      setCollapsed(true);
+    }
+
+    const themeToggle = document.querySelector<HTMLButtonElement>('[data-admin-theme-toggle]');
+    const updateThemeToggle = () => {
+      const dark = document.documentElement.classList.contains('dark');
+      const label = dark ? 'Switch to light theme' : 'Switch to dark theme';
+      themeToggle?.setAttribute('aria-label', label);
+      themeToggle?.setAttribute('title', label);
+      themeToggle?.setAttribute('aria-pressed', String(dark));
+    };
+
+    themeToggle?.addEventListener('click', () => {
+      const dark = !document.documentElement.classList.contains('dark');
+      document.documentElement.classList.toggle('dark', dark);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      localStorage.setItem('tosder-admin-theme', dark ? 'dark' : 'light');
+      updateThemeToggle();
+    });
+
+    updateThemeToggle();
+
+    collapseButton?.addEventListener('click', () => {
+      setCollapsed(shell?.dataset.collapsed !== 'true');
+    });
+
+    const setMobile = (open: boolean) => {
+      if (!shell || !mobileOverlay || !mobileButton) return;
+      shell.dataset.mobileOpen = String(open);
+      mobileOverlay.hidden = !open;
+      mobileButton.setAttribute('aria-expanded', String(open));
+
+      if (open) {
+        sidebar?.querySelector<HTMLElement>('a, button')?.focus();
+      } else {
+        mobileButton.focus();
+      }
+    };
+
+    mobileButton?.addEventListener('click', () => {
+      setMobile(shell?.dataset.mobileOpen !== 'true');
+    });
+    mobileOverlay?.addEventListener('click', () => setMobile(false));
+
+    const visibleOptions = () => options.filter((option) => !option.hidden);
+
+    const setActive = (index: number) => {
+      const visible = visibleOptions();
+      if (visible.length === 0) {
+        input?.removeAttribute('aria-activedescendant');
+        return;
+      }
+
+      activeIndex = (index + visible.length) % visible.length;
+      visible.forEach((option, optionIndex) => {
+        const selected = optionIndex === activeIndex;
+        option.setAttribute('aria-selected', String(selected));
+        option.classList.toggle('is-focused', selected);
+      });
+
+      input?.setAttribute('aria-activedescendant', visible[activeIndex].id);
+      visible[activeIndex].scrollIntoView({ block: 'nearest' });
+    };
+
+    const filterCommands = (value: string) => {
+      const term = value.trim().toLowerCase();
+      let count = 0;
+
+      options.forEach((option) => {
+        const match = !term || (option.dataset.search ?? '').includes(term);
+        option.hidden = !match;
+        if (match) count += 1;
+      });
+
+      if (empty) empty.hidden = count > 0;
+      setActive(0);
+    };
+
+    const openPalette = () => {
+      if (!palette) return;
+      lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      palette.showModal();
+      if (input) {
+        input.value = '';
+        filterCommands('');
+        input.focus();
+      }
+    };
+
+    document.querySelectorAll('[data-command-open]').forEach((trigger) => {
+      trigger.addEventListener('click', openPalette);
+    });
+
+    palette?.addEventListener('close', () => {
+      lastFocused?.focus();
+    });
+
+    palette?.addEventListener('click', (event) => {
+      if (event.target === palette) palette.close();
+    });
+
+    input?.addEventListener('input', () => filterCommands(input.value));
+    input?.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setActive(activeIndex + 1);
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setActive(activeIndex - 1);
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        visibleOptions()[activeIndex]?.click();
+      }
+    });
+
+    options.forEach((option) => {
+      option.addEventListener('mousemove', () => {
+        const visible = visibleOptions();
+        const index = visible.indexOf(option);
+        if (index >= 0) setActive(index);
+      });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        if (palette?.open) palette.close();
+        else openPalette();
+        return;
+      }
+
+      if (event.key === 'Escape' && shell?.dataset.mobileOpen === 'true' && !palette?.open) {
+        setMobile(false);
+        return;
+      }
+
+      if (isEditable(event.target)) return;
+
+      if (event.key === '?') {
+        event.preventDefault();
+        document.querySelector<HTMLElement>('[data-shortcuts-open]')?.click();
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'g') {
+        lastG = Date.now();
+        return;
+      }
+
+      if (lastG && Date.now() - lastG < 900) {
+        const destinations: Record<string, string> = {
+          o: '/admin',
+          c: '/admin/content',
+          t: '/admin/templates',
+          u: '/admin/users',
+          m: '/admin/moderation',
+          p: '/admin/competitions',
+          r: '/admin/rewards',
+          a: '/admin/audit',
+        };
+        const destination = destinations[event.key.toLowerCase()];
+        if (destination) {
+          event.preventDefault();
+          location.href = destination;
+        }
+        lastG = 0;
+      }
+    });
+
+    document.addEventListener('click', (event) => {
+      const target = event.target as Node;
+      document.querySelectorAll<HTMLDetailsElement>('details.account[open]').forEach((details) => {
+        if (!details.contains(target)) details.open = false;
+      });
+    });
+  </script>
+
+  <style>
+    .admin-shell {
+      display: grid;
+      grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+      min-height: 100vh;
+      background: var(--color-bg);
+      transition: grid-template-columns var(--duration-base) var(--ease-standard);
+    }
+
+    .admin-shell[data-collapsed='true'] {
+      grid-template-columns: var(--admin-sidebar-collapsed) minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      border-right: var(--border-width) solid var(--color-border);
+      background: var(--color-bg-subtle);
+      overflow: hidden;
+    }
+
+    .sidebar__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      height: var(--admin-topbar-height);
+      padding: 0 var(--space-3);
+      border-bottom: var(--border-width) solid var(--color-border);
+      flex: none;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-width: 0;
+      color: var(--color-text);
+    }
+
+    .brand__mark {
+      display: grid;
+      place-items: center;
+      width: 1.375rem;
+      height: 1.375rem;
+      flex: none;
+      border-radius: var(--radius-md);
+      background: var(--color-accent);
+      color: var(--color-accent-contrast);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-semibold);
+      letter-spacing: -0.02em;
+    }
+
+    .brand__text {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-width: 0;
+    }
+
+    .brand__name {
+      font-size: var(--text-base);
+      font-weight: var(--weight-semibold);
+      letter-spacing: -0.02em;
+    }
+
+    .brand__badge {
+      padding: 0 var(--space-1);
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-subtle);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      line-height: 1.4;
+    }
+
+    .sidebar__collapse {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--control-height-sm);
+      height: var(--control-height-sm);
+      flex: none;
+      border: var(--border-width) solid transparent;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--color-text-subtle);
+    }
+
+    .sidebar__collapse:hover {
+      background: var(--color-surface-sunken);
+      color: var(--color-text);
+    }
+
+    .collapse-icon--open {
+      display: none;
+    }
+
+    .admin-shell[data-collapsed='true'] .collapse-icon--close {
+      display: none;
+    }
+
+    .admin-shell[data-collapsed='true'] .collapse-icon--open {
+      display: block;
+    }
+
+    .sidebar__nav {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: var(--space-4);
+      padding: var(--space-2);
+      overflow-y: auto;
+    }
+
+    .nav-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .nav-group__label {
+      padding: 0 var(--space-2);
+      color: var(--color-text-subtle);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
+      letter-spacing: 0.025em;
+    }
+
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      width: 100%;
+      height: 1.875rem;
+      padding: 0 var(--space-2);
+      border: 0;
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--color-text-muted);
+      font-size: var(--text-base);
+      font-weight: var(--weight-regular);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .nav-item:hover {
+      background: var(--color-surface-sunken);
+      color: var(--color-text);
+    }
+
+    .nav-item.is-active {
+      background: var(--color-surface);
+      color: var(--color-text);
+      box-shadow: inset 2px 0 0 var(--chart-3);
+    }
+
+    .nav-item.is-active svg {
+      color: var(--chart-3);
+    }
+
+    .nav-item__label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .nav-item__badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.125rem;
+      height: 1.125rem;
+      margin-left: auto;
+      padding: 0 var(--space-1);
+      border-radius: var(--radius-full);
+      background: var(--color-surface-sunken);
+      color: var(--color-text-muted);
+      font-size: var(--text-xs);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .nav-item.is-active .nav-item__badge {
+      background: var(--color-accent);
+      color: var(--color-accent-contrast);
+    }
+
+    .nav-item__shortcut {
+      margin-left: auto;
+      color: var(--color-text-subtle);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar__footer {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding: var(--space-2);
+      border-top: var(--border-width) solid var(--color-border);
+      flex: none;
+    }
+
+    .sidebar__user {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-2);
+      padding: var(--space-2);
+      border-top: var(--border-width) solid var(--color-border);
+    }
+
+    .sidebar__user-copy {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      line-height: var(--leading-tight);
+    }
+
+    .sidebar__user-copy strong {
+      font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
+    }
+
+    .sidebar__user-copy span {
+      color: var(--color-text-subtle);
+      font-size: var(--text-xs);
+    }
+
+    .avatar {
+      display: inline-grid;
+      place-items: center;
+      width: 1.375rem;
+      height: 1.375rem;
+      flex: none;
+      border-radius: var(--radius-full);
+      background: var(--color-accent);
+      color: var(--color-accent-contrast);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-semibold);
+      letter-spacing: -0.02em;
+    }
+
+    .admin-shell[data-collapsed='true'] .brand__text,
+    .admin-shell[data-collapsed='true'] .nav-group__label,
+    .admin-shell[data-collapsed='true'] .nav-item__label,
+    .admin-shell[data-collapsed='true'] .nav-item__badge,
+    .admin-shell[data-collapsed='true'] .nav-item__shortcut,
+    .admin-shell[data-collapsed='true'] .sidebar__user-copy {
+      display: none;
+    }
+
+    .admin-shell[data-collapsed='true'] .sidebar__header {
+      justify-content: center;
+      gap: var(--space-1);
+      padding: 0;
+    }
+
+    .admin-shell[data-collapsed='true'] .nav-item {
+      justify-content: center;
+      padding: 0;
+    }
+
+    .admin-shell[data-collapsed='true'] .sidebar__user {
+      justify-content: center;
+      padding: var(--space-2) 0;
+    }
+
+    .admin-main {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      height: var(--admin-topbar-height);
+      padding: 0 var(--space-5);
+      border-bottom: var(--border-width) solid var(--color-border);
+      background: var(--color-bg);
+      flex: none;
+    }
+
+    .topbar__menu {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: var(--control-height-sm);
+      height: var(--control-height-sm);
+      padding: 0;
+      border: var(--border-width) solid transparent;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--color-text-muted);
+    }
+
+    .topbar__menu:hover {
+      background: var(--color-surface-sunken);
+      color: var(--color-text);
+    }
+
+    .breadcrumbs {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+      min-width: 0;
+      color: var(--color-text-subtle);
+      font-size: var(--text-sm);
+      white-space: nowrap;
+    }
+
+    .breadcrumbs a:hover {
+      color: var(--color-text);
+    }
+
+    .breadcrumbs span[aria-current='page'] {
+      color: var(--color-text);
+      font-weight: var(--weight-medium);
+    }
+
+    .topbar__actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+      margin-left: auto;
+    }
+
+    .search-trigger {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      height: var(--control-height-sm);
+      width: 13.75rem;
+      padding: 0 var(--space-2);
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      color: var(--color-text-subtle);
+      font-size: var(--text-sm);
+      text-align: left;
+    }
+
+    .search-trigger:hover {
+      border-color: var(--color-border-strong);
+      color: var(--color-text-muted);
+    }
+
+    .search-trigger__label {
+      flex: 1;
+    }
+
+    .search-trigger__keys {
+      display: flex;
+      gap: 2px;
+    }
+
+    .topbar-icon {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--control-height-sm);
+      height: var(--control-height-sm);
+      padding: 0;
+      border: var(--border-width) solid transparent;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--color-text-muted);
+    }
+
+    .topbar-icon:hover {
+      background: var(--color-surface-sunken);
+      color: var(--color-text);
+    }
+
+    .theme-icon--sun {
+      display: none;
+    }
+
+    .dark .theme-icon--sun {
+      display: block;
+    }
+
+    .dark .theme-icon--moon {
+      display: none;
+    }
+
+    .notification-dot {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 5px;
+      height: 5px;
+      border-radius: var(--radius-full);
+      background: var(--chart-3);
+      box-shadow: 0 0 0 2px var(--color-bg);
+    }
+
+    .account {
+      position: relative;
+    }
+
+    .account__summary {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      height: var(--control-height-sm);
+      padding: 0 var(--space-1);
+      border-radius: var(--radius-md);
+      color: var(--color-text-muted);
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .account__summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .account__summary:hover {
+      background: var(--color-surface-sunken);
+      color: var(--color-text);
+    }
+
+    .account__name {
+      font-size: var(--text-sm);
+      color: var(--color-text);
+    }
+
+    .account__menu {
+      position: absolute;
+      top: calc(100% + var(--space-2));
+      right: 0;
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      width: 13.5rem;
+      padding: var(--space-1);
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-lg);
+      background: var(--color-surface-raised);
+      box-shadow: var(--shadow-md);
+    }
+
+    .account__header {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding: var(--space-2);
+      margin-bottom: var(--space-1);
+      border-bottom: var(--border-width) solid var(--color-border);
+    }
+
+    .account__header strong {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+    }
+
+    .account__header span {
+      color: var(--color-text-subtle);
+      font-size: var(--text-xs);
+    }
+
+    .account__menu a,
+    .account__menu button {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      height: 1.75rem;
+      padding: 0 var(--space-2);
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+      text-align: left;
+    }
+
+    .account__menu a:hover,
+    .account__menu button:hover {
+      background: var(--color-surface-sunken);
+      color: var(--color-text);
+    }
+
+    .account__menu .account__danger {
+      color: var(--color-danger-text);
+    }
+
+    .admin-content {
+      width: 100%;
+      max-width: 100rem;
+      margin: 0 auto;
+      padding: var(--space-6) var(--space-7) var(--space-12);
+    }
+
+    .mobile-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 45;
+      background: rgb(0 0 0 / 0.55);
+    }
+
+    .mobile-overlay[hidden] {
+      display: none;
+    }
+
+    .command-palette {
+      width: min(100% - var(--space-8), 34rem);
+      max-height: min(70vh, 32rem);
+      margin: 12vh auto auto;
+      padding: 0;
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-lg);
+      background: var(--color-surface-raised);
+      color: var(--color-text);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .command-palette::backdrop {
+      background: rgb(0 0 0 / 0.55);
+    }
+
+    .command-palette__search {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      height: 3rem;
+      padding: 0 var(--space-4);
+      border-bottom: var(--border-width) solid var(--color-border);
+      color: var(--color-text-subtle);
+    }
+
+    .command-palette__search input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      background: transparent;
+      color: var(--color-text);
+      font-size: var(--text-md);
+      outline: none;
+    }
+
+    .command-palette__search input::placeholder {
+      color: var(--color-text-subtle);
+    }
+
+    .command-palette__list {
+      max-height: 22rem;
+      padding: var(--space-2);
+      overflow-y: auto;
+    }
+
+    .command-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: 2rem;
+      padding: 0 var(--space-2);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-muted);
+      font-size: var(--text-base);
+    }
+
+    .command-item:hover,
+    .command-item.is-focused {
+      background: var(--color-surface-sunken);
+      color: var(--color-text);
+    }
+
+    .command-item[aria-selected='true'] {
+      background: var(--color-surface-sunken);
+      color: var(--color-text);
+    }
+
+    .command-item__label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .command-item__group {
+      color: var(--color-text-subtle);
+      font-size: var(--text-xs);
+    }
+
+    .command-empty {
+      padding: var(--space-4) var(--space-2);
+      color: var(--color-text-subtle);
+      font-size: var(--text-sm);
+      text-align: center;
+    }
+
+    .command-palette__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      min-height: 2.25rem;
+      padding: 0 var(--space-3);
+      border-top: var(--border-width) solid var(--color-border);
+      color: var(--color-text-subtle);
+      font-size: var(--text-xs);
+    }
+
+    .command-palette__hints {
+      display: flex;
+      gap: var(--space-3);
+    }
+
+    .command-palette__shortcut-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    .shortcut-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      min-height: 1.875rem;
+      padding: 0 var(--space-2);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+    }
+
+    .shortcut-row:hover {
+      background: var(--color-surface-sunken);
+    }
+
+    .shortcut-keys {
+      display: flex;
+      gap: var(--space-1);
+    }
+
+    @media (max-width: 1120px) {
+      .account__name {
+        display: none;
+      }
+
+      .search-trigger {
+        width: 9rem;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .admin-shell,
+      .admin-shell[data-collapsed='true'] {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 50;
+        width: min(18rem, 86vw);
+        transform: translateX(-100%);
+        transition: transform var(--duration-base) var(--ease-standard);
+      }
+
+      .admin-shell[data-mobile-open='true'] .sidebar {
+        transform: translateX(0);
+      }
+
+      .admin-shell[data-collapsed='true'] .brand__text,
+      .admin-shell[data-collapsed='true'] .nav-group__label,
+      .admin-shell[data-collapsed='true'] .nav-item__label,
+      .admin-shell[data-collapsed='true'] .nav-item__badge,
+      .admin-shell[data-collapsed='true'] .nav-item__shortcut,
+      .admin-shell[data-collapsed='true'] .sidebar__user-copy {
+        display: initial;
+      }
+
+      .sidebar__collapse {
+        display: none;
+      }
+
+      .topbar__menu {
+        display: inline-flex;
+      }
+
+      .topbar {
+        padding: 0 var(--space-3);
+      }
+
+      .admin-content {
+        padding: var(--space-5) var(--space-4) var(--space-10);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .search-trigger {
+        width: var(--control-height-sm);
+        justify-content: center;
+        padding: 0;
+      }
+
+      .search-trigger__label,
+      .search-trigger__keys {
+        display: none;
+      }
+
+      .breadcrumbs {
+        display: none;
+      }
+    }
+  </style>
+</BaseLayout>

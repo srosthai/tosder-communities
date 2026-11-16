@@ -1,0 +1,259 @@
+---
+import { ArrowUpRight, Check, EyeOff, Flag, ShieldAlert, UserX } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import Panel from '../../components/admin/Panel.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+
+const reports = [
+  { id: 'RPT-1042', target: 'Kampot slow weekend', type: 'Template', reason: 'Misleading pricing', age: '18 min', priority: 'High', status: 'Open' },
+  { id: 'RPT-1041', target: 'Phnom Penh in 48 hours', type: 'Template', reason: 'Stale safety advice', age: '2 hours', priority: 'Medium', status: 'Open' },
+  { id: 'RPT-1039', target: 'Comment on Koh Rong dive', type: 'Comment', reason: 'Harassment', age: '5 hours', priority: 'High', status: 'Open' },
+  { id: 'RPT-1037', target: 'Battambang countryside loop', type: 'Template', reason: 'Unlicensed photo', age: '1 day', priority: 'Medium', status: 'In review' },
+  { id: 'RPT-1034', target: 'Malis Chhay', type: 'Account', reason: 'Spam profile links', age: '2 days', priority: 'Low', status: 'In review' },
+];
+
+const priorityVariant = (priority: string) =>
+  priority === 'High' ? 'danger' : priority === 'Medium' ? 'warning' : 'neutral';
+---
+
+<AdminLayout title="Moderation">
+  <PageHeader
+    title="Moderation"
+    description="Review reports, protect travelers, and keep decisions consistent and auditable."
+  >
+    <Button variant="secondary">
+      Moderation guide
+      <ArrowUpRight size={14} stroke-width={1.75} />
+    </Button>
+  </PageHeader>
+
+  <div class="moderation-grid">
+    <Panel title="Open reports" description="5 open · 2 high priority">
+      <div class="queue" role="list" aria-label="Open reports">
+        {reports.map((report, index) => (
+          <a class:list={['queue-item', { 'is-active': index === 0 }]} href={`/admin/moderation?report=${report.id}`} role="listitem">
+            <span class="queue-main">
+              <span class="queue-title">
+                <strong>{report.target}</strong>
+                <Badge variant={priorityVariant(report.priority)} dot>{report.priority}</Badge>
+              </span>
+              <span class="queue-meta">{report.reason} · {report.type} · {report.age} ago</span>
+            </span>
+            <span class="queue-id">{report.id}</span>
+          </a>
+        ))}
+      </div>
+    </Panel>
+
+    <Panel title="Selected report" description="RPT-1042 · opened 18 minutes ago">
+      <div class="report">
+        <div class="report__header">
+          <div>
+            <h3>Kampot slow weekend</h3>
+            <p>Template by Dara Lim · Published 4 hours ago</p>
+          </div>
+          <Badge variant="danger" dot>High priority</Badge>
+        </div>
+
+        <dl class="report__facts">
+          <div>
+            <dt>Reason</dt>
+            <dd>Misleading pricing</dd>
+          </div>
+          <div>
+            <dt>Reporter</dt>
+            <dd>Member · identity protected</dd>
+          </div>
+          <div>
+            <dt>Source</dt>
+            <dd>Template detail page</dd>
+          </div>
+        </dl>
+
+        <div class="report__quote">
+          <span class="report__quote-label">Reported content</span>
+          <p>“The guide says the boat transfer is included, but the operator charges $12 per person at the pier.”</p>
+        </div>
+
+        <div class="report__actions">
+          <Button variant="primary">
+            <EyeOff size={15} stroke-width={1.75} />
+            Hide content
+          </Button>
+          <Button variant="secondary">
+            <Flag size={15} stroke-width={1.75} />
+            Warn creator
+          </Button>
+          <Button variant="ghost">
+            <Check size={15} stroke-width={1.75} />
+            Dismiss
+          </Button>
+          <Button variant="danger" size="sm">
+            <UserX size={14} stroke-width={1.75} />
+            Suspend
+          </Button>
+        </div>
+
+        <p class="report__note">
+          <ShieldAlert size={13} stroke-width={1.75} aria-hidden="true" />
+          Every action is written to the audit log and notifies the creator.
+        </p>
+      </div>
+    </Panel>
+  </div>
+</AdminLayout>
+
+<style>
+  .moderation-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
+    gap: var(--space-3);
+    align-items: start;
+  }
+
+  .queue {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .queue-item:last-child {
+    border-bottom: 0;
+  }
+
+  .queue-item:hover,
+  .queue-item.is-active {
+    background: var(--color-surface-sunken);
+  }
+
+  .queue-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .queue-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .queue-title strong {
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .queue-meta {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .queue-id {
+    flex: none;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .report {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .report__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .report__header h3 {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .report__header p {
+    margin-top: 2px;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .report__facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    margin: 0;
+    padding: var(--space-3) 0;
+    border-top: var(--border-width) solid var(--color-border);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .report__facts dt {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .report__facts dd {
+    margin: 2px 0 0;
+    font-size: var(--text-xs);
+  }
+
+  .report__quote {
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-subtle);
+  }
+
+  .report__quote-label {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .report__quote p {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .report__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .report__note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-1);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  @media (max-width: 1200px) {
+    .moderation-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

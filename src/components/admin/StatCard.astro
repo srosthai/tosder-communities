@@ -1,0 +1,94 @@
+---
+interface Props {
+  label: string;
+  value: string;
+  hint?: string;
+  trend?: string;
+  tone?: 'positive' | 'warning' | 'neutral';
+}
+
+const {
+  label,
+  value,
+  hint,
+  trend,
+  tone = 'neutral',
+} = Astro.props;
+---
+
+<div class="stat">
+  <div class="stat__top">
+    <span class="stat__label">{label}</span>
+    <span class="stat__icon" aria-hidden="true"><slot name="icon" /></span>
+  </div>
+  <div class="stat__value">{value}</div>
+  <div class="stat__meta">
+    {trend && <span class:list={['stat__trend', `stat__trend--${tone}`]}>{trend}</span>}
+    {hint && <span class="stat__hint">{hint}</span>}
+  </div>
+</div>
+
+<style>
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .stat__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .stat__label {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+  }
+
+  .stat__icon {
+    color: var(--color-text-subtle);
+  }
+
+  .stat__value {
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    line-height: var(--leading-tight);
+  }
+
+  .stat__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 1rem;
+    font-size: var(--text-xs);
+  }
+
+  .stat__trend {
+    font-weight: var(--weight-medium);
+  }
+
+  .stat__trend--positive {
+    color: var(--color-success-text);
+  }
+
+  .stat__trend--warning {
+    color: var(--color-warning-text);
+  }
+
+  .stat__trend--neutral {
+    color: var(--color-text-muted);
+  }
+
+  .stat__hint {
+    color: var(--color-text-subtle);
+  }
+</style>

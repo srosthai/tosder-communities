@@ -1,0 +1,372 @@
+---
+import { Check, ChevronDown, Search } from '@lucide/astro';
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+interface Props {
+  name: string;
+  label: string;
+  options: Option[];
+  value?: string;
+  searchPlaceholder?: string;
+  class?: string;
+}
+
+const {
+  name,
+  label,
+  options,
+  value = '',
+  searchPlaceholder = 'Search…',
+  class: className,
+} = Astro.props;
+
+const selected = options.find((option) => option.value === value) ?? options[0];
+const id = `combobox-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<div
+  class:list={['combobox', className]}
+  data-combobox
+  data-datatable-select={name}
+  data-name={name}
+>
+  <span class="sr-only" id={`${id}-label`}>{label}</span>
+  <button
+    type="button"
+    class="combobox__trigger"
+    data-combobox-trigger
+    aria-haspopup="listbox"
+    aria-expanded="false"
+    aria-labelledby={`${id}-label ${id}-value`}
+  >
+    <span class="combobox__value" id={`${id}-value`} data-combobox-value-label>
+      {selected?.label ?? label}
+    </span>
+    <ChevronDown size={14} stroke-width={1.75} aria-hidden="true" />
+  </button>
+
+  <div class="combobox__panel" data-combobox-panel hidden>
+    <label class="combobox__search">
+      <Search size={14} stroke-width={1.75} aria-hidden="true" />
+      <span class="sr-only">{searchPlaceholder}</span>
+      <input
+        type="search"
+        placeholder={searchPlaceholder}
+        autocomplete="off"
+        data-combobox-search
+      />
+    </label>
+    <div
+      class="combobox__options"
+      role="listbox"
+      aria-labelledby={`${id}-label`}
+      data-combobox-options
+    >
+      {options.map((option) => (
+        <button
+          type="button"
+          class:list={['combobox__option', { 'is-selected': option.value === selected?.value }]}
+          role="option"
+          aria-selected={option.value === selected?.value ? 'true' : 'false'}
+          data-combobox-option
+          data-value={option.value}
+          data-label={option.label.toLowerCase()}
+        >
+          <span>{option.label}</span>
+          <Check class="combobox__check" size={14} stroke-width={2} aria-hidden="true" />
+        </button>
+      ))}
+    </div>
+    <p class="combobox__empty" data-combobox-empty hidden>No matches</p>
+  </div>
+
+  <input type="hidden" name={name} value={selected?.value ?? value} data-combobox-input />
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-combobox]').forEach((root) => {
+    const trigger = root.querySelector<HTMLButtonElement>('[data-combobox-trigger]');
+    const panel = root.querySelector<HTMLElement>('[data-combobox-panel]');
+    const search = root.querySelector<HTMLInputElement>('[data-combobox-search]');
+    const valueLabel = root.querySelector<HTMLElement>('[data-combobox-value-label]');
+    const hidden = root.querySelector<HTMLInputElement>('input[type="hidden"]');
+    const options = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-combobox-option]'));
+    const empty = root.querySelector<HTMLElement>('[data-combobox-empty]');
+    const name = root.dataset.datatableSelect ?? root.dataset.name ?? '';
+
+    if (!trigger || !panel || !search || !hidden) return;
+
+    const visibleOptions = () => options.filter((option) => !option.hidden);
+
+    const close = (focusTrigger = false) => {
+      panel.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      if (focusTrigger) trigger.focus();
+    };
+
+    const filter = (value: string) => {
+      const term = value.trim().toLowerCase();
+      let count = 0;
+
+      options.forEach((option) => {
+        const match = !term || (option.dataset.label ?? '').includes(term);
+        option.hidden = !match;
+        if (match) count += 1;
+      });
+
+      if (empty) empty.hidden = count > 0;
+    };
+
+    const select = (option: HTMLButtonElement) => {
+      const value = option.dataset.value ?? '';
+      hidden.value = value;
+      if (valueLabel) {
+        valueLabel.textContent =
+          option.querySelector('span')?.textContent?.trim() ?? valueLabel.textContent ?? '';
+      }
+
+      options.forEach((item) => {
+        const selected = item === option;
+        item.classList.toggle('is-selected', selected);
+        item.setAttribute('aria-selected', String(selected));
+      });
+
+      close(true);
+      hidden.dispatchEvent(new Event('change', { bubbles: true }));
+      root.dispatchEvent(
+        new CustomEvent('combobox-change', {
+          bubbles: true,
+          detail: { name, value },
+        }),
+      );
+    };
+
+    const open = () => {
+      panel.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      search.value = '';
+      filter('');
+      search.focus();
+
+      const selectedOption = options.find((option) => option.dataset.value === hidden.value);
+      selectedOption?.scrollIntoView({ block: 'nearest' });
+    };
+
+    trigger.addEventListener('click', () => {
+      if (panel.hidden) open();
+      else close();
+    });
+
+    trigger.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    });
+
+    search.addEventListener('input', () => filter(search.value));
+    search.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close(true);
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        visibleOptions()[0]?.focus();
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        visibleOptions()[0]?.click();
+      }
+    });
+
+    options.forEach((option) => {
+      option.addEventListener('click', () => select(option));
+      option.addEventListener('keydown', (event) => {
+        const visible = visibleOptions();
+        const index = visible.indexOf(option);
+
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          visible[(index + 1) % visible.length]?.focus();
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          visible[(index - 1 + visible.length) % visible.length]?.focus();
+        }
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          select(option);
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(true);
+        }
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      const target = event.target as Node;
+      if (!root.contains(target)) close();
+    });
+
+    root.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close(true);
+    });
+  });
+</script>
+
+<style>
+  .combobox {
+    position: relative;
+    display: inline-flex;
+    min-width: 10.5rem;
+  }
+
+  .combobox__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    width: 100%;
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    text-align: left;
+  }
+
+  .combobox__trigger:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  .combobox__trigger[aria-expanded='true'] {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent);
+  }
+
+  .combobox__trigger svg {
+    flex: none;
+    color: var(--color-text-subtle);
+  }
+
+  .combobox__value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .combobox__panel {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    width: 15rem;
+    padding: var(--space-1);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .combobox__panel[hidden] {
+    display: none;
+  }
+
+  .combobox__search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 2rem;
+    padding: 0 var(--space-2);
+    margin-bottom: var(--space-1);
+    border-bottom: var(--border-width) solid var(--color-border);
+    color: var(--color-text-subtle);
+  }
+
+  .combobox__search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .combobox__search input::placeholder {
+    color: var(--color-text-subtle);
+  }
+
+  .combobox__options {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 14rem;
+    overflow-y: auto;
+  }
+
+  .combobox__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: 1.875rem;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-align: left;
+  }
+
+  .combobox__option:hover,
+  .combobox__option:focus-visible {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+    outline: none;
+  }
+
+  .combobox__option.is-selected {
+    color: var(--color-text);
+  }
+
+  .combobox__check {
+    flex: none;
+    color: var(--chart-3);
+    opacity: 0;
+  }
+
+  .combobox__option.is-selected .combobox__check {
+    opacity: 1;
+  }
+
+  .combobox__empty {
+    padding: var(--space-3) var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+
+  @media (max-width: 900px) {
+    .combobox {
+      width: 100%;
+    }
+
+    .combobox__panel {
+      width: 100%;
+    }
+  }
+</style>

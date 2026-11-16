@@ -5,7 +5,8 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
-  theme?: 'light' | 'admin';
+  theme?: 'light' | 'dark';
+  surface?: 'public' | 'admin';
   bodyClass?: string;
 }
 
@@ -13,20 +14,47 @@ const {
   title,
   description = 'Tosder Communities — discover Cambodia, create reusable itineraries, and share travel templates.',
   theme = 'light',
+  surface = 'public',
   bodyClass,
 } = Astro.props;
 
-const themeColor = theme === 'admin' ? '#09090b' : '#ffffff';
+const themeColor = theme === 'dark' ? '#141417' : '#ffffff';
 ---
 
 <!doctype html>
-<html lang="en" data-theme={theme} class:list={[{ dark: theme === 'admin' }]}>
+<html
+  lang="en"
+  data-theme={theme}
+  data-surface={surface}
+  class:list={[{ dark: theme === 'dark' }]}
+>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content={themeColor} />
     <meta name="description" content={description} />
     <title>{title}</title>
+    <script is:inline>
+      (() => {
+        try {
+          const root = document.documentElement;
+          const key =
+            root.dataset.surface === 'admin'
+              ? 'tosder-admin-theme'
+              : 'tosder-theme';
+          const stored = localStorage.getItem(key);
+          if (stored === 'dark' || stored === 'light') {
+            root.classList.toggle('dark', stored === 'dark');
+            root.dataset.theme = stored;
+            document
+              .querySelector('meta[name="theme-color"]')
+              ?.setAttribute('content', stored === 'dark' ? '#141417' : '#ffffff');
+          }
+        } catch {
+          /* localStorage can be unavailable in private contexts. */
+        }
+      })();
+    </script>
   </head>
   <body class={bodyClass}>
     <slot />
