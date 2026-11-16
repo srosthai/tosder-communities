@@ -1,0 +1,407 @@
+---
+import { ArrowLeft } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import PublicButton from '../../components/public/PublicButton.astro';
+import DestinationCard from '../../components/public/DestinationCard.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { getDestinationBySlug, listRelatedDestinations } from '../../lib/destinations';
+
+export const prerender = false;
+
+const slug = Astro.params.slug ?? '';
+const destination = await getDestinationBySlug(slug);
+
+if (!destination) {
+  Astro.response.status = 404;
+}
+
+const related = destination
+  ? await listRelatedDestinations(destination.id, destination.province, 3)
+  : [];
+
+const provinceSlug = destination?.province.toLowerCase().replaceAll(' ', '-') ?? '';
+const photo = destination?.photos[0];
+const image = photo?.url ?? destination?.image ?? '/image/placeholder-destination.svg';
+const alt = photo?.alt ?? destination?.alt ?? destination?.name ?? 'Destination';
+const coords =
+  destination?.latitude != null && destination.longitude != null
+    ? `${destination.latitude.toFixed(4)}, ${destination.longitude.toFixed(4)}`
+    : null;
+---
+
+{destination ? (
+  <PublicLayout
+    title={`${destination.name} — Tosder Communities`}
+    description={destination.summary ?? `Discover ${destination.name} in ${destination.province}, Cambodia.`}
+  >
+    <article class="destination-page">
+      <div class="container">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span aria-hidden="true">/</span>
+          <a href="/explore">Explore</a>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{destination.name}</span>
+        </nav>
+
+        <header class="destination-header">
+          <p class="label">{destination.province}{destination.category ? ` · ${destination.category}` : ''}</p>
+          <h1>{destination.name}</h1>
+          {destination.summary && <p class="lede">{destination.summary}</p>}
+          <div class="tag-row">
+            {destination.categories.map((category) => <span class="tag">{category}</span>)}
+            {destination.tags.map((tag) => <span class="tag tag--quiet">{tag}</span>)}
+          </div>
+        </header>
+
+        <figure class="cover">
+          <img src={image} alt={alt} width="1200" height="800" fetchpriority="high" decoding="async" />
+          {photo?.credit && <figcaption>{photo.credit}</figcaption>}
+        </figure>
+
+        <div class="content-grid">
+          <div class="prose">
+            {destination.description && (
+              <section aria-labelledby="about-heading">
+                <h2 id="about-heading">About {destination.name}</h2>
+                <p>{destination.description}</p>
+              </section>
+            )}
+
+            {destination.practicalTips && (
+              <section aria-labelledby="tips-heading">
+                <h2 id="tips-heading">Practical tips</h2>
+                <p>{destination.practicalTips}</p>
+              </section>
+            )}
+
+            <section aria-labelledby="templates-heading">
+              <h2 id="templates-heading">Templates that include {destination.name}</h2>
+              <EmptyState
+                title="No templates yet"
+                description="When creators publish an itinerary that includes this place, it will appear here."
+              >
+                <PublicButton href="/templates" variant="secondary">Browse templates</PublicButton>
+              </EmptyState>
+            </section>
+          </div>
+
+          <aside class="sidebar" aria-label="Destination facts">
+            <div class="fact-card">
+              <h2>At a glance</h2>
+              <dl>
+                <div>
+                  <dt>Province</dt>
+                  <dd><a href={`/explore?province=${provinceSlug}`}>{destination.province}</a></dd>
+                </div>
+                <div>
+                  <dt>Category</dt>
+                  <dd>{destination.category ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Coordinates</dt>
+                  <dd class="mono">{coords ?? 'Not recorded'}</dd>
+                </div>
+              </dl>
+              <a class="sidebar-link" href={`/explore?province=${provinceSlug}`}>
+                More in {destination.province}
+              </a>
+            </div>
+          </aside>
+        </div>
+
+        {related.length > 0 && (
+          <section class="related" aria-labelledby="related-heading">
+            <div class="related__header">
+              <h2 id="related-heading">More in {destination.province}</h2>
+              <a class="section-link" href={`/explore?province=${provinceSlug}`}>
+                Explore the province
+              </a>
+            </div>
+            <div class="related-grid">
+              {related.map((item) => <DestinationCard destination={item} />)}
+            </div>
+          </section>
+        )}
+
+        <a class="back-link" href="/explore">
+          <ArrowLeft size={14} stroke-width={1.75} />
+          Back to Explore
+        </a>
+      </div>
+    </article>
+  </PublicLayout>
+) : (
+  <PublicLayout title="Destination not found — Tosder Communities">
+    <section class="not-found">
+      <div class="container">
+        <p class="label">Error 404</p>
+        <h1>Destination not found.</h1>
+        <p>This place does not exist, is unpublished, or has moved.</p>
+        <div class="actions">
+          <PublicButton href="/explore">Back to Explore</PublicButton>
+          <PublicButton href="/" variant="secondary">Home</PublicButton>
+        </div>
+      </div>
+    </section>
+  </PublicLayout>
+)}
+
+<style>
+  .container {
+    width: min(100% - var(--space-8), 72rem);
+    margin: 0 auto;
+  }
+
+  .destination-page,
+  .not-found {
+    padding: clamp(var(--space-8), 8vw, 5rem) 0;
+  }
+
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .breadcrumbs a:hover {
+    color: var(--color-text);
+  }
+
+  .breadcrumbs span[aria-current='page'] {
+    color: var(--color-text-muted);
+  }
+
+  .destination-header {
+    max-width: 60rem;
+    margin-bottom: var(--space-6);
+  }
+
+  .label {
+    margin-bottom: var(--space-3);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  h1 {
+    margin-bottom: var(--space-3);
+    font-size: clamp(2.5rem, 6vw, 4.25rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.055em;
+    line-height: 1.02;
+  }
+
+  .lede {
+    max-width: 58ch;
+    color: var(--color-text-muted);
+    font-size: var(--text-lg);
+    line-height: var(--leading-relaxed);
+  }
+
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-top: var(--space-4);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    height: 1.5rem;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-bg-subtle);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .tag--quiet {
+    border: var(--border-width) solid var(--color-border);
+    background: transparent;
+  }
+
+  .cover {
+    margin: 0 0 var(--space-8);
+  }
+
+  .cover img {
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    border-radius: var(--radius-xl);
+    object-fit: cover;
+    background: var(--color-surface-sunken);
+  }
+
+  .cover figcaption {
+    margin-top: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(16rem, 0.55fr);
+    gap: clamp(var(--space-8), 6vw, 5rem);
+    align-items: start;
+  }
+
+  .prose {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .prose h2,
+  .sidebar h2,
+  .related h2 {
+    margin-bottom: var(--space-3);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.025em;
+  }
+
+  .prose p {
+    max-width: 68ch;
+    color: var(--color-text-muted);
+    font-size: var(--text-md);
+    line-height: var(--leading-relaxed);
+  }
+
+  .sidebar {
+    position: sticky;
+    top: calc(3.5rem + var(--space-4));
+  }
+
+  .fact-card {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+  }
+
+  .fact-card h2 {
+    font-size: var(--text-md);
+  }
+
+  .fact-card dl {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin: 0;
+  }
+
+  .fact-card dt {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .fact-card dd {
+    margin: 2px 0 0;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .fact-card dd a:hover,
+  .sidebar-link:hover,
+  .section-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .sidebar-link {
+    display: inline-flex;
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .related {
+    margin-top: var(--space-10);
+    padding-top: var(--space-8);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .related__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .related-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .section-link {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-8);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .back-link:hover {
+    color: var(--color-text);
+  }
+
+  .not-found {
+    min-height: 50vh;
+  }
+
+  .not-found h1 {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+  }
+
+  .not-found > .container > p:not(.label) {
+    margin: var(--space-3) 0 var(--space-5);
+    color: var(--color-text-muted);
+    font-size: var(--text-lg);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  @media (max-width: 960px) {
+    .content-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: static;
+    }
+
+    .related-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .related-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

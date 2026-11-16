@@ -8,7 +8,7 @@ interface Props {
 const { destination } = Astro.props;
 ---
 
-<a class="destination-card" href={`/explore?destination=${destination.slug}`}>
+<a class="destination-card" href={`/destinations/${destination.slug}`}>
   <span class="destination-card__media">
     <img
       src={destination.image}

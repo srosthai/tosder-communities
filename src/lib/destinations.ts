@@ -142,6 +142,45 @@ export async function getDestinationBySlug(slug: string): Promise<DestinationDet
   };
 }
 
+export async function listRelatedDestinations(
+  destinationId: string,
+  province: string,
+  limit = 3,
+): Promise<DestinationSummary[]> {
+  const rows = await getPrisma().destination.findMany({
+    where: {
+      status: 'PUBLISHED',
+      id: { not: destinationId },
+      province: { name: province },
+    },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    take: limit,
+    include: {
+      province: { select: { name: true } },
+      photos: {
+        orderBy: { sortOrder: 'asc' },
+        take: 1,
+        select: { url: true, alt: true },
+      },
+      categories: {
+        take: 1,
+        include: { category: { select: { name: true } } },
+      },
+    },
+  });
+
+  return rows.map((destination) => ({
+    id: destination.id,
+    name: destination.name,
+    slug: destination.slug,
+    summary: destination.summary,
+    province: destination.province.name,
+    category: destination.categories[0]?.category.name ?? null,
+    image: destination.coverPhotoUrl ?? destination.photos[0]?.url ?? imageFallback,
+    alt: destination.photos[0]?.alt ?? destination.name,
+  }));
+}
+
 export async function listProvinces() {
   return getPrisma().province.findMany({
     where: { status: 'PUBLISHED' },
