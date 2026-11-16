@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title">
+  <title id="title">Placeholder landscape for seeded destinations</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <circle cx="920" cy="180" r="74" fill="#fde68a"/>
+  <path d="M0 520 260 340 480 520 710 300 980 520 1200 390V800H0Z" fill="#a7f3d0" opacity=".7"/>
+  <path d="M0 580 300 440 540 590 820 390 1200 550V800H0Z" fill="#0f766e" opacity=".85"/>
+  <rect y="590" width="1200" height="210" fill="url(#water)" opacity=".9"/>
+  <path d="M0 690c160-34 300 34 460 0s330 36 520 0 220 10 220 10v100H0Z" fill="#ecfeff" opacity=".28"/>
+</svg>
