@@ -1,9 +1,11 @@
 /* Design tokens for Tosder Communities.
  *
- * Public surface: near-monochrome light theme, Vercel-minimal.
- * Admin surface: graphite dark theme, Linear-dense.
+ * The palette, radius, font, and chart colors come from the shadcn preset
+ * b3SSBXCTb (Luma / zinc / Geist / lime charts). These semantic aliases keep
+ * Astro primitives decoupled from raw shadcn variable names.
  *
- * Components must use these semantic tokens rather than raw values.
+ * Public surface: light, near-monochrome.
+ * Admin surface: `.dark` shadcn variables plus `data-theme="admin"`.
  */
 
 :root {
@@ -44,10 +46,6 @@
   --space-12: 5rem;
 
   --radius-xs: 3px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
   --radius-full: 999px;
 
   --border-width: 1px;
@@ -68,67 +66,59 @@
   --admin-sidebar-collapsed: 3.5rem;
   --admin-topbar-height: 3rem;
 
-  --color-bg: #ffffff;
-  --color-bg-subtle: #fafafa;
-  --color-surface: #ffffff;
-  --color-surface-raised: #ffffff;
-  --color-surface-sunken: #f5f5f5;
-  --color-border: #e5e5e5;
-  --color-border-strong: #d4d4d4;
-  --color-text: #0a0a0a;
-  --color-text-muted: #525252;
-  --color-text-subtle: #737373;
-  --color-text-inverse: #ffffff;
-  --color-accent: #111111;
-  --color-accent-hover: #333333;
-  --color-accent-contrast: #ffffff;
-  --color-focus: #2563eb;
-  --color-success: #15803d;
-  --color-success-bg: #f0fdf4;
-  --color-success-text: #166534;
-  --color-warning: #b45309;
-  --color-warning-bg: #fffbeb;
-  --color-warning-text: #92400e;
-  --color-danger: #b91c1c;
-  --color-danger-bg: #fef2f2;
-  --color-danger-text: #991b1b;
-  --color-info: #1d4ed8;
-  --color-info-bg: #eff6ff;
-  --color-info-text: #1e40af;
+  /* shadcn semantic aliases */
+  --color-bg: var(--background);
+  --color-bg-subtle: var(--secondary);
+  --color-surface: var(--card);
+  --color-surface-raised: var(--popover);
+  --color-surface-sunken: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--ring);
+  --color-text: var(--foreground);
+  --color-text-muted: oklch(0.5 0.016 285.938);
+  --color-text-subtle: oklch(0.5 0.016 285.938);
+  --color-text-inverse: var(--primary-foreground);
+  --color-accent: var(--primary);
+  --color-accent-hover: color-mix(in oklch, var(--primary) 88%, var(--background));
+  --color-accent-contrast: var(--primary-foreground);
+  --color-focus: var(--ring);
+
+  /* Status extends the preset, which only defines destructive + chart colors. */
+  --color-success: oklch(0.55 0.15 150);
+  --color-success-bg: color-mix(in oklch, var(--color-success) 12%, transparent);
+  --color-success-text: oklch(0.42 0.13 150);
+  --color-warning: oklch(0.62 0.15 80);
+  --color-warning-bg: color-mix(in oklch, var(--color-warning) 14%, transparent);
+  --color-warning-text: oklch(0.44 0.12 80);
+  --color-danger: var(--destructive);
+  --color-danger-bg: color-mix(in oklch, var(--destructive) 12%, transparent);
+  --color-danger-text: color-mix(in oklch, var(--destructive) 70%, black);
+  --color-info: oklch(0.55 0.16 255);
+  --color-info-bg: color-mix(in oklch, var(--color-info) 12%, transparent);
+  --color-info-text: oklch(0.42 0.14 255);
 }
 
 [data-theme='admin'] {
   color-scheme: dark;
+}
 
-  --color-bg: #09090b;
-  --color-bg-subtle: #0c0c0e;
-  --color-surface: #111113;
-  --color-surface-raised: #18181b;
-  --color-surface-sunken: #0b0b0d;
-  --color-border: #27272a;
-  --color-border-strong: #3f3f46;
-  --color-text: #f4f4f5;
-  --color-text-muted: #a1a1aa;
-  --color-text-subtle: #71717a;
-  --color-text-inverse: #09090b;
-  --color-accent: #5e6ad2;
-  --color-accent-hover: #6e79e8;
-  --color-accent-contrast: #ffffff;
-  --color-focus: #93a0ff;
-  --color-success: #4ade80;
-  --color-success-bg: rgb(34 197 94 / 0.12);
-  --color-success-text: #86efac;
-  --color-warning: #fbbf24;
-  --color-warning-bg: rgb(245 158 11 / 0.12);
-  --color-warning-text: #fcd34d;
-  --color-danger: #f87171;
-  --color-danger-bg: rgb(239 68 68 / 0.12);
-  --color-danger-text: #fca5a5;
-  --color-info: #60a5fa;
-  --color-info-bg: rgb(59 130 246 / 0.12);
-  --color-info-text: #93c5fd;
-
+.dark {
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
   --shadow-md: 0 12px 32px rgb(0 0 0 / 0.45);
   --shadow-lg: 0 32px 80px rgb(0 0 0 / 0.6);
+
+  --color-text-muted: var(--muted-foreground);
+  --color-text-subtle: var(--muted-foreground);
+  --color-success: oklch(0.78 0.17 150);
+  --color-success-bg: color-mix(in oklch, var(--color-success) 16%, transparent);
+  --color-success-text: oklch(0.86 0.12 150);
+  --color-warning: oklch(0.82 0.15 85);
+  --color-warning-bg: color-mix(in oklch, var(--color-warning) 16%, transparent);
+  --color-warning-text: oklch(0.9 0.1 85);
+  --color-danger: var(--destructive);
+  --color-danger-bg: color-mix(in oklch, var(--destructive) 16%, transparent);
+  --color-danger-text: var(--destructive);
+  --color-info: oklch(0.72 0.14 255);
+  --color-info-bg: color-mix(in oklch, var(--color-info) 16%, transparent);
+  --color-info-text: oklch(0.84 0.1 255);
 }
