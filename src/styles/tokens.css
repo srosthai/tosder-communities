@@ -1,0 +1,124 @@
+/* Design tokens for Tosder Communities.
+ *
+ * The palette, radius, font, and chart colors come from the shadcn preset
+ * b3SSBXCTb (Luma / zinc / Geist / lime charts). These semantic aliases keep
+ * Astro primitives decoupled from raw shadcn variable names.
+ *
+ * Public surface: light, near-monochrome.
+ * Admin surface: `.dark` shadcn variables plus `data-theme="admin"`.
+ */
+
+:root {
+  color-scheme: light;
+
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.5rem;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-9: 2.5rem;
+  --space-10: 3rem;
+  --space-11: 4rem;
+  --space-12: 5rem;
+
+  --radius-xs: 3px;
+  --radius-full: 999px;
+
+  --border-width: 1px;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 24px 64px rgb(0 0 0 / 0.16);
+
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --control-height-sm: 1.75rem;
+  --control-height-md: 2rem;
+  --control-height-lg: 2.25rem;
+  --content-max: 70rem;
+  --admin-sidebar-width: 14.75rem;
+  --admin-sidebar-collapsed: 3.5rem;
+  --admin-topbar-height: 3rem;
+
+  /* shadcn semantic aliases */
+  --color-bg: var(--background);
+  --color-bg-subtle: var(--secondary);
+  --color-surface: var(--card);
+  --color-surface-raised: var(--popover);
+  --color-surface-sunken: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--ring);
+  --color-text: var(--foreground);
+  --color-text-muted: oklch(0.5 0.016 285.938);
+  --color-text-subtle: oklch(0.5 0.016 285.938);
+  --color-text-inverse: var(--primary-foreground);
+  --color-accent: var(--primary);
+  --color-accent-hover: color-mix(in oklch, var(--primary) 88%, var(--background));
+  --color-accent-contrast: var(--primary-foreground);
+  --color-focus: var(--ring);
+
+  /* Status extends the preset, which only defines destructive + chart colors. */
+  --color-success: oklch(0.55 0.15 150);
+  --color-success-bg: color-mix(in oklch, var(--color-success) 12%, transparent);
+  --color-success-text: oklch(0.42 0.13 150);
+  --color-warning: oklch(0.62 0.15 80);
+  --color-warning-bg: color-mix(in oklch, var(--color-warning) 14%, transparent);
+  --color-warning-text: oklch(0.44 0.12 80);
+  --color-danger: var(--destructive);
+  --color-danger-bg: color-mix(in oklch, var(--destructive) 12%, transparent);
+  --color-danger-text: color-mix(in oklch, var(--destructive) 70%, black);
+  --color-info: oklch(0.55 0.16 255);
+  --color-info-bg: color-mix(in oklch, var(--color-info) 12%, transparent);
+  --color-info-text: oklch(0.42 0.14 255);
+}
+
+[data-theme='admin'] {
+  color-scheme: dark;
+}
+
+.dark {
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 12px 32px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 32px 80px rgb(0 0 0 / 0.6);
+
+  --color-text-muted: var(--muted-foreground);
+  --color-text-subtle: var(--muted-foreground);
+  --color-success: oklch(0.78 0.17 150);
+  --color-success-bg: color-mix(in oklch, var(--color-success) 16%, transparent);
+  --color-success-text: oklch(0.86 0.12 150);
+  --color-warning: oklch(0.82 0.15 85);
+  --color-warning-bg: color-mix(in oklch, var(--color-warning) 16%, transparent);
+  --color-warning-text: oklch(0.9 0.1 85);
+  --color-danger: var(--destructive);
+  --color-danger-bg: color-mix(in oklch, var(--destructive) 16%, transparent);
+  --color-danger-text: var(--destructive);
+  --color-info: oklch(0.72 0.14 255);
+  --color-info-bg: color-mix(in oklch, var(--color-info) 16%, transparent);
+  --color-info-text: oklch(0.84 0.1 255);
+}

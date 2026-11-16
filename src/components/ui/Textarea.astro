@@ -1,0 +1,104 @@
+---
+interface Props extends astroHTML.JSX.TextareaHTMLAttributes {
+  label?: string;
+  hint?: string;
+  error?: string;
+}
+
+const {
+  label,
+  hint,
+  error,
+  id,
+  class: className,
+  ...rest
+} = Astro.props;
+
+const fieldId = id ?? `textarea-${Math.random().toString(36).slice(2, 9)}`;
+const hintId = hint ? `${fieldId}-hint` : undefined;
+const errorId = error ? `${fieldId}-error` : undefined;
+const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
+---
+
+<label class="field" for={fieldId}>
+  {label && <span class="field__label">{label}</span>}
+  <textarea
+    id={fieldId}
+    class:list={['textarea', { 'textarea--error': Boolean(error) }, className]}
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={describedBy}
+    {...rest}
+  ></textarea>
+  {error ? (
+    <span class="field__error" id={errorId}>{error}</span>
+  ) : (
+    hint && <span class="field__hint" id={hintId}>{hint}</span>
+  )}
+</label>
+
+<style>
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .field__label {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--color-text);
+  }
+
+  .field__hint,
+  .field__error {
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+  }
+
+  .field__hint {
+    color: var(--color-text-subtle);
+  }
+
+  .field__error {
+    color: var(--color-danger-text);
+  }
+
+  .textarea {
+    width: 100%;
+    min-height: 5.5rem;
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    resize: vertical;
+    transition:
+      border-color var(--duration-fast) var(--ease-standard),
+      box-shadow var(--duration-fast) var(--ease-standard);
+  }
+
+  .textarea::placeholder {
+    color: var(--color-text-subtle);
+  }
+
+  .textarea:hover:not(:disabled) {
+    border-color: var(--color-border-strong);
+  }
+
+  .textarea:focus {
+    border-color: var(--color-focus);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent);
+  }
+
+  .textarea--error {
+    border-color: var(--color-danger);
+  }
+
+  .textarea:disabled {
+    background: var(--color-bg-subtle);
+    opacity: 0.6;
+  }
+</style>

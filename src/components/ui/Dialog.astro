@@ -1,0 +1,155 @@
+---
+import { X } from '@lucide/astro';
+
+interface Props {
+  id: string;
+  title: string;
+  description?: string;
+  size?: 'sm' | 'md' | 'lg';
+}
+
+const { id, title, description, size = 'md' } = Astro.props;
+const hasFooter = Astro.slots.has('footer');
+---
+
+<dialog id={id} class:list={['dialog', `dialog--${size}`]} aria-labelledby={`${id}-title`}>
+  <div class="dialog__header">
+    <div class="dialog__heading">
+      <h2 class="dialog__title" id={`${id}-title`}>{title}</h2>
+      {description && <p class="dialog__description">{description}</p>}
+    </div>
+    <button type="button" class="dialog__close" data-dialog-close aria-label="Close dialog">
+      <X size={16} stroke-width={1.75} />
+    </button>
+  </div>
+
+  <div class="dialog__body">
+    <slot />
+  </div>
+
+  {hasFooter && (
+    <div class="dialog__footer">
+      <slot name="footer" />
+    </div>
+  )}
+</dialog>
+
+<script>
+  const openDialog = (id: string) => {
+    const dialog = document.getElementById(id) as HTMLDialogElement | null;
+    if (!dialog) return;
+    dialog.showModal();
+
+    const focusable = dialog.querySelector<HTMLElement>(
+      'input, select, textarea, button, [href], [tabindex]:not([tabindex="-1"])',
+    );
+    focusable?.focus();
+  };
+
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const opener = target.closest<HTMLElement>('[data-dialog-open]');
+    if (opener?.dataset.dialogOpen) {
+      event.preventDefault();
+      openDialog(opener.dataset.dialogOpen);
+      return;
+    }
+
+    const closer = target.closest<HTMLElement>('[data-dialog-close]');
+    if (closer) {
+      closer.closest('dialog')?.close();
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target instanceof HTMLDialogElement) {
+      event.target.close();
+    }
+  });
+</script>
+
+<style>
+  .dialog {
+    width: min(100% - var(--space-8), 32rem);
+    max-height: min(85vh, 44rem);
+    padding: 0;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .dialog--sm {
+    width: min(100% - var(--space-8), 24rem);
+  }
+
+  .dialog--lg {
+    width: min(100% - var(--space-8), 48rem);
+  }
+
+  .dialog::backdrop {
+    background: rgb(0 0 0 / 0.55);
+  }
+
+  .dialog__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .dialog__heading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .dialog__title {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .dialog__description {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--color-text-muted);
+  }
+
+  .dialog__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-height-sm);
+    height: var(--control-height-sm);
+    flex: none;
+    padding: 0;
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-text-muted);
+  }
+
+  .dialog__close:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-text);
+  }
+
+  .dialog__body {
+    padding: var(--space-4);
+    overflow-y: auto;
+  }
+
+  .dialog__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
+    background: var(--color-bg-subtle);
+  }
+</style>

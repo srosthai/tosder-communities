@@ -1,0 +1,63 @@
+---
+import { Inbox } from '@lucide/astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  class?: string;
+}
+
+const { title, description, class: className } = Astro.props;
+---
+
+<div class:list={['empty-state', className]}>
+  <div class="empty-state__icon" aria-hidden="true">
+    <slot name="icon">
+      <Inbox size={20} stroke-width={1.75} />
+    </slot>
+  </div>
+  <h3 class="empty-state__title">{title}</h3>
+  {description && <p class="empty-state__description">{description}</p>}
+  <slot />
+</div>
+
+<style>
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-10) var(--space-6);
+    border: var(--border-width) dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+    text-align: center;
+  }
+
+  .empty-state__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: var(--space-1);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text-subtle);
+  }
+
+  .empty-state__title {
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+    color: var(--color-text);
+  }
+
+  .empty-state__description {
+    max-width: 28rem;
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--color-text-muted);
+  }
+</style>
