@@ -18,6 +18,18 @@ test.describe('public visual', () => {
     });
   }
 
+  test('explore light', async ({ page }) => {
+    await page.goto('/explore');
+    await page.evaluate(() => document.fonts.ready);
+    await page.addStyleTag({
+      content: 'astro-dev-toolbar { display: none !important; }',
+    });
+
+    await expect(page).toHaveScreenshot('public-explore-light.png', {
+      fullPage: true,
+    });
+  });
+
   test('404 page', async ({ page }) => {
     await page.goto('/not-a-real-page');
     await page.evaluate(() => document.fonts.ready);

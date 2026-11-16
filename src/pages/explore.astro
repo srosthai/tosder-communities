@@ -1,23 +1,290 @@
 ---
-import { Compass } from '@lucide/astro';
+import { Search } from '@lucide/astro';
 import PublicPage from '../components/public/PublicPage.astro';
+import DestinationCard from '../components/public/DestinationCard.astro';
 import PublicButton from '../components/public/PublicButton.astro';
-import Badge from '../components/ui/Badge.astro';
 import EmptyState from '../components/ui/EmptyState.astro';
+import Pagination from '../components/ui/Pagination.astro';
+import {
+  listCategories,
+  listDestinations,
+  listProvinces,
+  type DestinationSort,
+} from '../lib/destinations';
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+const province = Astro.url.searchParams.get('province') ?? '';
+const category = Astro.url.searchParams.get('category') ?? '';
+const sortParam = Astro.url.searchParams.get('sort') ?? 'recommended';
+const sort: DestinationSort =
+  sortParam === 'name' || sortParam === 'newest' ? sortParam : 'recommended';
+const pageParam = Number.parseInt(Astro.url.searchParams.get('page') ?? '1', 10);
+const page = Number.isFinite(pageParam) ? Math.max(1, pageParam) : 1;
+const pageSize = 6;
+
+let destinations: Awaited<ReturnType<typeof listDestinations>>['destinations'] = [];
+let total = 0;
+let currentPage = 1;
+let totalPages = 1;
+let provinces: Awaited<ReturnType<typeof listProvinces>> = [];
+let categories: Awaited<ReturnType<typeof listCategories>> = [];
+let dataError: string | null = null;
+
+try {
+  const [result, provinceRows, categoryRows] = await Promise.all([
+    listDestinations({ q, province, category, sort, page, pageSize }),
+    listProvinces(),
+    listCategories(),
+  ]);
+
+  destinations = result.destinations;
+  total = result.total;
+  currentPage = result.page;
+  totalPages = result.totalPages;
+  provinces = provinceRows;
+  categories = categoryRows;
+} catch (error) {
+  dataError = error instanceof Error ? error.message : 'Unable to load destinations.';
+}
+
+const baseParams = new URLSearchParams();
+if (q) baseParams.set('q', q);
+if (province) baseParams.set('province', province);
+if (category) baseParams.set('category', category);
+if (sort !== 'recommended') baseParams.set('sort', sort);
+const baseUrl = `/explore${baseParams.size > 0 ? `?${baseParams.toString()}` : ''}`;
+const activeFilters = Boolean(q || province || category || sort !== 'recommended');
 ---
 
 <PublicPage
   label="Explore"
   title="Find a place worth the detour."
-  description="Search and filter Cambodia's provinces, destinations, and practical travel notes. The catalog and map are being prepared."
+  description="Search Cambodia's provinces and destinations, then start with a place that fits the trip you are planning."
 >
-  <Badge slot="actions" variant="info">In build</Badge>
+  <form class="explore-filters" method="get" action="/explore" data-explore-filters>
+    <label class="explore-search">
+      <Search size={15} stroke-width={1.75} aria-hidden="true" />
+      <span class="sr-only">Search destinations</span>
+      <input
+        type="search"
+        name="q"
+        value={q}
+        placeholder="Search a place or province…"
+        autocomplete="off"
+      />
+    </label>
 
-  <EmptyState
-    title="The destination catalog is being prepared"
-    description="Reviewed provinces, destinations, coordinates, and photography are the next milestone. The admin content preview already shows the model."
-  >
-    <Compass slot="icon" size={20} stroke-width={1.75} />
-    <PublicButton href="/">Back to home</PublicButton>
-  </EmptyState>
+    <select name="province" aria-label="Filter by province">
+      <option value="">All provinces</option>
+      {provinces.map((item) => (
+        <option value={item.slug} selected={item.slug === province}>{item.name}</option>
+      ))}
+    </select>
+
+    <select name="category" aria-label="Filter by category">
+      <option value="">All categories</option>
+      {categories.map((item) => (
+        <option value={item.slug} selected={item.slug === category}>{item.name}</option>
+      ))}
+    </select>
+
+    <select name="sort" aria-label="Sort destinations">
+      <option value="recommended" selected={sort === 'recommended'}>Recommended</option>
+      <option value="name" selected={sort === 'name'}>Name A–Z</option>
+      <option value="newest" selected={sort === 'newest'}>Newest</option>
+    </select>
+
+    <button type="submit">Apply</button>
+    {activeFilters && <a class="clear-link" href="/explore">Clear</a>}
+  </form>
+
+  <div class="results-header" aria-live="polite">
+    <p>
+      <strong>{total}</strong>
+      {total === 1 ? ' place' : ' places'}
+      {q && <> matching “{q}”</>}
+    </p>
+    <span>Page {currentPage} of {totalPages}</span>
+  </div>
+
+  {dataError ? (
+    <EmptyState
+      title="The destination catalog is temporarily unavailable"
+      description="The public content query could not complete. Check the system status or try again."
+    >
+      <PublicButton href="/status">Check system status</PublicButton>
+    </EmptyState>
+  ) : destinations.length > 0 ? (
+    <>
+      <div class="explore-grid">
+        {destinations.map((destination) => (
+          <DestinationCard destination={destination} />
+        ))}
+      </div>
+      <div class="explore-footer">
+        <Pagination current={currentPage} total={totalPages} baseUrl={baseUrl} />
+      </div>
+    </>
+  ) : (
+    <EmptyState
+      title="No destinations match these filters"
+      description="Try a broader search, a different province, or clear the filters."
+    >
+      <PublicButton href="/explore" variant="secondary">Clear filters</PublicButton>
+    </EmptyState>
+  )}
 </PublicPage>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-explore-filters]');
+  form?.querySelectorAll('select').forEach((select) => {
+    select.addEventListener('change', () => form.requestSubmit());
+  });
+</script>
+
+<style>
+  .explore-filters {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
+    flex-wrap: wrap;
+  }
+
+  .explore-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: min(100%, 22rem);
+    height: var(--control-height-lg);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-subtle);
+  }
+
+  .explore-search:focus-within {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent);
+  }
+
+  .explore-search svg {
+    position: absolute;
+    left: var(--space-3);
+    pointer-events: none;
+  }
+
+  .explore-search input {
+    width: 100%;
+    height: 100%;
+    padding: 0 var(--space-3) 0 2.125rem;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .explore-search input::placeholder {
+    color: var(--color-text-subtle);
+  }
+
+  .explore-filters select {
+    height: var(--control-height-lg);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .explore-filters select:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  .explore-filters button {
+    height: var(--control-height-lg);
+    padding: 0 var(--space-4);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .explore-filters button:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .clear-link {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-decoration: underline;
+    text-decoration-color: var(--color-text-subtle);
+    text-underline-offset: 2px;
+  }
+
+  .clear-link:hover {
+    color: var(--color-text);
+  }
+
+  .results-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .results-header strong {
+    color: var(--color-text);
+    font-weight: var(--weight-semibold);
+  }
+
+  .results-header span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .explore-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .explore-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--space-6);
+  }
+
+  @media (max-width: 960px) {
+    .explore-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .explore-search {
+      width: 100%;
+    }
+
+    .explore-filters select {
+      flex: 1;
+    }
+
+    .explore-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .explore-footer {
+      justify-content: flex-start;
+    }
+  }
+</style>

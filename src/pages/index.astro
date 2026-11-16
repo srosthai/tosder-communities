@@ -12,6 +12,7 @@ import {
 import PublicLayout from '../layouts/PublicLayout.astro';
 import Badge from '../components/ui/Badge.astro';
 import EmptyState from '../components/ui/EmptyState.astro';
+import DestinationCard from '../components/public/DestinationCard.astro';
 import PublicButton from '../components/public/PublicButton.astro';
 import { getPrisma } from '../db/prisma';
 
@@ -185,26 +186,7 @@ try {
       {destinations.length > 0 ? (
         <div class="destination-grid">
           {destinations.map((destination) => (
-            <a class="destination-card" href={`/explore?destination=${destination.slug}`}>
-              <span class="destination-card__media">
-                <img
-                  src={destination.image}
-                  alt={destination.alt}
-                  width="800"
-                  height="600"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </span>
-              <span class="destination-card__body">
-                <span class="destination-card__meta">
-                  <span>{destination.province}</span>
-                  {destination.category && <span>{destination.category}</span>}
-                </span>
-                <strong>{destination.name}</strong>
-                {destination.summary && <span class="destination-card__summary">{destination.summary}</span>}
-              </span>
-            </a>
+            <DestinationCard destination={destination} />
           ))}
         </div>
       ) : (
