@@ -14,5 +14,11 @@ export default defineConfig({
     viewport: { width: 1440, height: 1200 },
     colorScheme: 'light',
   },
-  reporter: [['list']],
+  webServer: {
+    command: 'npm run build && npm run start',
+    url: 'http://127.0.0.1:4321',
+    reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
+  },
+  reporter: [['list'], ['html', { open: 'never' }]],
 });

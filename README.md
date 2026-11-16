@@ -35,6 +35,17 @@ The Neon project is linked in `.neon`.
 
 The admin shell supports dark and light themes; the choice is stored locally.
 
+### Quality checks
+
+```bash
+npm test          # interaction, accessibility, and visual tests
+npm run test:a11y # axe scans only
+npm run lighthouse
+```
+
+- [Quality budgets](./docs/quality-budgets.md)
+- [Keyboard and screen-reader checklist](./docs/qa/keyboard-screenreader-checklist.md)
+
 ### API checks
 
 - `GET /api/health` — app, Neon, and Prisma status

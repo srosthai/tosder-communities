@@ -15,7 +15,11 @@
     "db:validate": "prisma validate",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test": "playwright test",
+    "test:admin": "playwright test tests/admin",
+    "test:a11y": "playwright test --grep accessibility",
+    "lighthouse": "lhci autorun"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.13",
@@ -38,6 +42,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
     "@axe-core/playwright": "^4.14.0",
+    "@lhci/cli": "^0.16.1",
     "@playwright/test": "^1.65.1",
     "dotenv": "^18.0.10",
     "prisma": "7.10.1",
