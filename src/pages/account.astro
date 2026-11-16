@@ -1,0 +1,210 @@
+---
+import { ArrowRight, LogOut, ShieldCheck, UserRound } from '@lucide/astro';
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+import Badge from '../components/ui/Badge.astro';
+import { getAuthForRequest } from '../lib/auth-server';
+
+export const prerender = false;
+
+const auth = getAuthForRequest(Astro);
+const { data } = await auth.getSession();
+
+if (!data?.user) {
+  return Astro.redirect('/sign-in?redirectTo=/account');
+}
+
+const user = data.user;
+---
+
+<PublicPage
+  label="Account"
+  title="Your account"
+  description="One profile for trips, saved places, and the creator workspace."
+>
+  <div class="account-card">
+    <div class="account-card__header">
+      <span class="account-avatar" aria-hidden="true">
+        <UserRound size={18} stroke-width={1.75} />
+      </span>
+      <div>
+        <h2>{user.name}</h2>
+        <p>{user.email}</p>
+      </div>
+      <Badge variant="success" dot>Signed in</Badge>
+    </div>
+
+    <dl class="account-facts">
+      <div>
+        <dt>Member ID</dt>
+        <dd>{user.id}</dd>
+      </div>
+      <div>
+        <dt>Email status</dt>
+        <dd>{user.emailVerified ? 'Verified' : 'Verification pending'}</dd>
+      </div>
+      <div>
+        <dt>Session</dt>
+        <dd>Managed Neon Auth</dd>
+      </div>
+    </dl>
+
+    <div class="account-actions">
+      <PublicButton href="/admin">
+        Open the admin preview
+        <ArrowRight size={14} stroke-width={2} />
+      </PublicButton>
+      <PublicButton href="/sign-up" variant="secondary">Invite a traveler</PublicButton>
+      {!user.emailVerified && (
+        <a class="verify-link" href="/verify-email">Verify email</a>
+      )}
+    </div>
+
+    <form method="post" action="/api/auth/sign-out" class="signout-form">
+      <button type="submit" class="signout-button">
+        <LogOut size={14} stroke-width={1.75} />
+        Sign out
+      </button>
+    </form>
+
+    <p class="account-note">
+      <ShieldCheck size={13} stroke-width={1.75} />
+      Public templates never expose private trip data.
+    </p>
+  </div>
+</PublicPage>
+
+<style>
+  .account-card {
+    max-width: 40rem;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .account-card__header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-5);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .account-avatar {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: none;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+  }
+
+  .account-card__header h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.02em;
+  }
+
+  .account-card__header p {
+    margin-top: 2px;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .account-card__header :global(.badge) {
+    margin-left: auto;
+  }
+
+  .account-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+    margin: 0;
+    padding: var(--space-5);
+    border-bottom: var(--border-width) solid var(--color-border);
+    background: var(--color-bg-subtle);
+  }
+
+  .account-facts dt {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .account-facts dd {
+    margin: 2px 0 0;
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-5);
+  }
+
+  .verify-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .verify-link:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .signout-form {
+    margin: 0;
+    padding: 0 var(--space-5) var(--space-4);
+  }
+
+  .signout-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-danger-text);
+    font-size: var(--text-xs);
+  }
+
+  .signout-button:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .account-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-5);
+    border-top: var(--border-width) solid var(--color-border);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  @media (max-width: 600px) {
+    .account-card__header {
+      flex-wrap: wrap;
+    }
+
+    .account-card__header :global(.badge) {
+      margin-left: 0;
+    }
+
+    .account-facts {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

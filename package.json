@@ -9,7 +9,7 @@
     "prebuild": "prisma generate",
     "build": "astro check && astro build",
     "preview": "astro preview",
-    "start": "node ./dist/server/entry.mjs",
+    "start": "node --env-file-if-exists=.env.local ./dist/server/entry.mjs",
     "check": "astro check",
     "test:visual": "playwright test tests/visual",
     "db:validate": "prisma validate",
@@ -21,7 +21,8 @@
     "test:a11y": "playwright test --grep accessibility",
     "lighthouse": "lhci autorun",
     "db:seed": "node prisma/seed.mjs",
-    "db:check": "node scripts/check-geography.mjs"
+    "db:check": "node scripts/check-geography.mjs",
+    "test:auth": "AUTH_E2E=true playwright test tests/auth"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.13",
@@ -31,6 +32,7 @@
     "@hugeicons/core-free-icons": "^4.4.0",
     "@hugeicons/react": "^1.1.10",
     "@lucide/astro": "^1.73.0",
+    "@neon/auth": "^0.8.2",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "@tailwindcss/vite": "^4.3.5",

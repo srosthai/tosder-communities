@@ -11,6 +11,7 @@ Backend foundation in progress. The product flow is documented in [`cambodia_tra
 - Astro + TypeScript
 - Astro server API routes
 - Neon Postgres
+- Neon Auth (Managed Better Auth)
 - Prisma ORM
 - Leaflet + PostGIS (planned)
 
@@ -23,7 +24,8 @@ npm run db:migrate
 npm run dev
 ```
 
-Set `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) in `.env.local` to your Neon connection strings.
+Set `DATABASE_URL` (pooled), `DIRECT_URL` (direct), `NEON_AUTH_BASE_URL`, and
+`NEON_AUTH_COOKIE_SECRET` in `.env.local`. See [Authentication](./docs/auth.md).
 
 The Neon project is linked in `.neon`.
 
@@ -39,6 +41,7 @@ The admin shell supports dark and light themes; the choice is stored locally.
 
 ```bash
 npm test          # interaction, accessibility, and visual tests
+npm run test:auth # authenticated flow against the real Neon Auth branch
 npm run test:a11y # axe scans only
 npm run lighthouse
 ```
@@ -57,6 +60,7 @@ The `todos` table is a smoke test, not part of the final domain model.
 
 - [Product flow](./cambodia_travel_platform_flow.pdf)
 - [Product decisions](./docs/decisions.md)
+- [Authentication](./docs/auth.md)
 - [Data model](./docs/data-model.md)
 - [Quality budgets](./docs/quality-budgets.md)
 - [Issues](https://github.com/srosthai/tosder-communities/issues)
