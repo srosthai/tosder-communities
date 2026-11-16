@@ -1,0 +1,121 @@
+---
+interface Props {
+  current: number;
+  total: number;
+  baseUrl?: string;
+  param?: string;
+  class?: string;
+}
+
+const {
+  current,
+  total,
+  baseUrl = Astro.url.pathname,
+  param = 'page',
+  class: className,
+} = Astro.props;
+
+const pages: Array<number | 'ellipsis'> = [];
+
+if (total <= 7) {
+  for (let page = 1; page <= total; page += 1) pages.push(page);
+} else {
+  pages.push(1);
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  if (start > 2) pages.push('ellipsis');
+  for (let page = start; page <= end; page += 1) pages.push(page);
+  if (end < total - 1) pages.push('ellipsis');
+  pages.push(total);
+}
+
+const hrefFor = (page: number) => {
+  if (page === 1) return baseUrl;
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}${param}=${page}`;
+};
+---
+
+{total > 1 && (
+  <nav class:list={['pagination', className]} aria-label="Pagination">
+    {current > 1 ? (
+      <a class="pagination__link" href={hrefFor(current - 1)} rel="prev" aria-label="Previous page">
+        ←
+      </a>
+    ) : (
+      <span class="pagination__link is-disabled" aria-disabled="true">←</span>
+    )}
+
+    {pages.map((page) =>
+      page === 'ellipsis' ? (
+        <span class="pagination__ellipsis" aria-hidden="true">…</span>
+      ) : (
+        <a
+          class:list={['pagination__link', { 'is-current': page === current }]}
+          href={hrefFor(page)}
+          aria-current={page === current ? 'page' : undefined}
+        >
+          {page}
+        </a>
+      ),
+    )}
+
+    {current < total ? (
+      <a class="pagination__link" href={hrefFor(current + 1)} rel="next" aria-label="Next page">
+        →
+      </a>
+    ) : (
+      <span class="pagination__link is-disabled" aria-disabled="true">→</span>
+    )}
+  </nav>
+)}
+
+<style>
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .pagination__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--control-height-sm);
+    height: var(--control-height-sm);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+    transition:
+      background-color var(--duration-fast) var(--ease-standard),
+      border-color var(--duration-fast) var(--ease-standard),
+      color var(--duration-fast) var(--ease-standard);
+  }
+
+  .pagination__link:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-text);
+  }
+
+  .pagination__link.is-current {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+  }
+
+  .pagination__link.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .pagination__ellipsis {
+    padding: 0 var(--space-1);
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+  }
+</style>

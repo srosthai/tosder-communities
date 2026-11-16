@@ -1,0 +1,705 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Badge from '../components/ui/Badge.astro';
+import Button from '../components/ui/Button.astro';
+import Checkbox from '../components/ui/Checkbox.astro';
+import Dialog from '../components/ui/Dialog.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import IconButton from '../components/ui/IconButton.astro';
+import Input from '../components/ui/Input.astro';
+import Kbd from '../components/ui/Kbd.astro';
+import Pagination from '../components/ui/Pagination.astro';
+import Select from '../components/ui/Select.astro';
+import Skeleton from '../components/ui/Skeleton.astro';
+import Table from '../components/ui/Table.astro';
+import Tabs from '../components/ui/Tabs.astro';
+import Textarea from '../components/ui/Textarea.astro';
+import Tooltip from '../components/ui/Tooltip.astro';
+import { Check, Copy, Plus, Search, Trash } from '@lucide/astro';
+
+const swatches = [
+  { name: 'Background', token: '--color-bg' },
+  { name: 'Surface', token: '--color-surface' },
+  { name: 'Raised', token: '--color-surface-raised' },
+  { name: 'Sunken', token: '--color-surface-sunken' },
+  { name: 'Border', token: '--color-border' },
+  { name: 'Border strong', token: '--color-border-strong' },
+  { name: 'Text', token: '--color-text' },
+  { name: 'Muted text', token: '--color-text-muted' },
+  { name: 'Accent', token: '--color-accent' },
+  { name: 'Focus', token: '--color-focus' },
+  { name: 'Success', token: '--color-success' },
+  { name: 'Danger', token: '--color-danger' },
+];
+
+const templates = [
+  {
+    name: 'Three days in Siem Reap',
+    status: 'Published',
+    creator: 'Sokha Meas',
+    province: 'Siem Reap',
+    uses: '184',
+    views: '2,410',
+    saves: '326',
+    updated: '2 hours ago',
+  },
+  {
+    name: 'Kampot slow weekend',
+    status: 'Pending review',
+    creator: 'Dara Lim',
+    province: 'Kampot',
+    uses: '—',
+    views: '—',
+    saves: '—',
+    updated: '4 hours ago',
+  },
+  {
+    name: 'Koh Rong dive and rest',
+    status: 'Draft',
+    creator: 'Malis Chhay',
+    province: 'Preah Sihanouk',
+    uses: '—',
+    views: '—',
+    saves: '—',
+    updated: 'Yesterday',
+  },
+  {
+    name: 'Phnom Penh in 48 hours',
+    status: 'Changes requested',
+    creator: 'Vannak Heng',
+    province: 'Phnom Penh',
+    uses: '92',
+    views: '1,208',
+    saves: '141',
+    updated: '3 days ago',
+  },
+];
+---
+
+<BaseLayout title="Design system — Tosder Communities">
+  <header class="page-header">
+    <div class="page-header__inner">
+      <a class="back-link" href="/">Tosder Communities</a>
+      <div class="page-header__row">
+        <div>
+          <p class="eyebrow">Design system</p>
+          <h1>Quiet tools, clear places.</h1>
+          <p class="lede">
+            The shared token layer and primitives for the public travel surface
+            and the dense admin workspace.
+          </p>
+        </div>
+        <div class="theme-switch" role="group" aria-label="Preview theme">
+          <button
+            type="button"
+            class="theme-switch__button"
+            data-theme-toggle="light"
+            aria-pressed="true"
+          >
+            Public
+          </button>
+          <button
+            type="button"
+            class="theme-switch__button"
+            data-theme-toggle="admin"
+            aria-pressed="false"
+          >
+            Admin
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="section" aria-labelledby="tokens-heading">
+      <div class="section__header">
+        <h2 id="tokens-heading">Tokens</h2>
+        <p>Semantic values only. Components never use raw colors or spacing.</p>
+      </div>
+      <div class="swatch-grid">
+        {swatches.map((swatch) => (
+          <div class="swatch">
+            <span
+              class="swatch__color"
+              style={`--swatch-color: var(${swatch.token});`}
+              aria-hidden="true"
+            ></span>
+            <span class="swatch__name">{swatch.name}</span>
+            <code class="swatch__token">{swatch.token}</code>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="type-heading">
+      <div class="section__header">
+        <h2 id="type-heading">Typography</h2>
+        <p>Geist Sans for the interface, Geist Mono for data and keyboard hints.</p>
+      </div>
+      <div class="type-stack">
+        <p class="type-display">Discover Cambodia, planned well.</p>
+        <p class="type-heading">A reusable itinerary for the coast.</p>
+        <p class="type-body">
+          Three days of food, water, and quiet roads. Built by a traveler who
+          has made the trip before.
+        </p>
+        <p class="type-small">Supporting detail and metadata live at this size.</p>
+        <p class="type-mono">template_usage_events · 184 qualified uses</p>
+      </div>
+      <p class="note">
+        Body copy stays under 80 characters per line. Numeric data uses tabular
+        figures in tables.
+      </p>
+    </section>
+
+    <section class="section" aria-labelledby="buttons-heading">
+      <div class="section__header">
+        <h2 id="buttons-heading">Buttons</h2>
+        <p>Primary action, quiet secondary actions, and destructive intent.</p>
+      </div>
+      <div class="row">
+        <Button variant="primary">
+          <Plus size={15} stroke-width={2} />
+          Create template
+        </Button>
+        <Button variant="secondary">Preview</Button>
+        <Button variant="ghost">Cancel</Button>
+        <Button variant="danger">
+          <Trash size={15} stroke-width={2} />
+          Delete
+        </Button>
+        <Button variant="primary" loading>Publishing</Button>
+        <Button variant="secondary" disabled>Disabled</Button>
+      </div>
+      <div class="row">
+        <Button size="sm" variant="secondary">Small</Button>
+        <Button size="md" variant="secondary">Medium</Button>
+        <Button size="lg" variant="primary">Large</Button>
+        <IconButton label="Search">
+          <Search size={16} stroke-width={1.75} />
+        </IconButton>
+        <IconButton label="Copy link" variant="secondary">
+          <Copy size={16} stroke-width={1.75} />
+        </IconButton>
+      </div>
+      <p class="note">
+        Every button has a visible focus ring, an explicit disabled state, and a
+        loading state that keeps its width stable.
+      </p>
+    </section>
+
+    <section class="section" aria-labelledby="fields-heading">
+      <div class="section__header">
+        <h2 id="fields-heading">Fields</h2>
+        <p>Labels are always visible. Errors are announced, not just colored.</p>
+      </div>
+      <div class="form-grid">
+        <Input label="Template title" placeholder="Three days in Siem Reap" />
+        <Input
+          label="Slug"
+          value="three-days-in-siem-reap"
+          hint="Used in the public URL. Changing it creates a redirect."
+        />
+        <Input
+          label="Cover image URL"
+          value="not-a-url"
+          error="Enter a valid https URL."
+        />
+        <Select
+          label="Province"
+          options={[
+            { value: 'siem-reap', label: 'Siem Reap' },
+            { value: 'kampot', label: 'Kampot' },
+            { value: 'koh-rong', label: 'Koh Rong' },
+          ]}
+        />
+        <Textarea
+          label="Short description"
+          placeholder="A quiet route through the temples and the countryside."
+          hint="Keep it under 160 characters."
+        ></Textarea>
+        <div class="checkbox-stack">
+          <Checkbox label="Allow travelers to copy this template" checked />
+          <Checkbox
+            label="Notify me when someone uses this template"
+            hint="You will still only see aggregate data."
+          />
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="badges-heading">
+      <div class="section__header">
+        <h2 id="badges-heading">Badges and status</h2>
+        <p>Status is readable without relying on color alone.</p>
+      </div>
+      <div class="row">
+        <Badge>Draft</Badge>
+        <Badge variant="accent" dot>Published</Badge>
+        <Badge variant="warning" dot>Pending review</Badge>
+        <Badge variant="success" dot>Qualified</Badge>
+        <Badge variant="danger" dot>Changes requested</Badge>
+        <Badge variant="info">Provisional</Badge>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="tabs-heading">
+      <div class="section__header">
+        <h2 id="tabs-heading">Tabs</h2>
+        <p>Navigation tabs use links and preserve browser history.</p>
+      </div>
+      <Tabs
+        items={[
+          { label: 'Overview', href: '#', active: true },
+          { label: 'Analytics', href: '#' },
+          { label: 'Versions', href: '#' },
+          { label: 'Feedback', href: '#' },
+        ]}
+      />
+      <div class="spacer"></div>
+      <Tabs
+        variant="segmented"
+        items={[
+          { label: 'All', href: '#', active: true, count: 24 },
+          { label: 'Published', href: '#', count: 18 },
+          { label: 'Drafts', href: '#', count: 6 },
+        ]}
+      />
+    </section>
+
+    <section class="section" aria-labelledby="table-heading">
+      <div class="section__header">
+        <h2 id="table-heading">Dense table</h2>
+        <p>Eight columns stay readable at 1280px. Rows are 36px tall.</p>
+      </div>
+      <Table>
+        <thead>
+          <tr>
+            <th scope="col">Template</th>
+            <th scope="col">Status</th>
+            <th scope="col">Creator</th>
+            <th scope="col">Province</th>
+            <th scope="col">Uses</th>
+            <th scope="col">Views</th>
+            <th scope="col">Saves</th>
+            <th scope="col">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {templates.map((template) => (
+            <tr>
+              <td><strong>{template.name}</strong></td>
+              <td>
+                <Badge
+                  variant={
+                    template.status === 'Published'
+                      ? 'success'
+                      : template.status === 'Draft'
+                        ? 'neutral'
+                        : template.status === 'Pending review'
+                          ? 'warning'
+                          : 'danger'
+                  }
+                  dot
+                >
+                  {template.status}
+                </Badge>
+              </td>
+              <td>{template.creator}</td>
+              <td>{template.province}</td>
+              <td class="numeric">{template.uses}</td>
+              <td class="numeric">{template.views}</td>
+              <td class="numeric">{template.saves}</td>
+              <td class="muted">{template.updated}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </section>
+
+    <section class="section" aria-labelledby="feedback-heading">
+      <div class="section__header">
+        <h2 id="feedback-heading">Dialogs, empty states, and loading</h2>
+        <p>Native dialog semantics, honest empty states, and quiet loading.</p>
+      </div>
+      <div class="row">
+        <Button variant="secondary" data-dialog-open="design-dialog">
+          Open dialog
+        </Button>
+      </div>
+
+      <div class="spacer"></div>
+      <EmptyState
+        title="No templates match these filters"
+        description="Try a broader province or clear the status filter. New templates appear here after review."
+      >
+        <Button variant="secondary" size="sm">Clear filters</Button>
+      </EmptyState>
+
+      <div class="skeleton-stack" aria-label="Loading example">
+        <Skeleton width="40%" height="0.75rem" />
+        <Skeleton width="100%" height="2.25rem" />
+        <Skeleton width="72%" height="0.75rem" />
+      </div>
+
+      <div class="row">
+        <span class="label">Keyboard</span>
+        <span class="row row--tight"><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
+        <Tooltip text="Search templates, destinations, and actions">
+          <Button variant="ghost" size="sm">Hover or focus me</Button>
+        </Tooltip>
+      </div>
+
+      <div class="spacer"></div>
+      <Pagination current={3} total={12} baseUrl="/design" />
+    </section>
+
+    <section class="section" aria-labelledby="a11y-heading">
+      <div class="section__header">
+        <h2 id="a11y-heading">Accessibility notes</h2>
+      </div>
+      <ul class="notes-list">
+        <li>Focus uses a 2px visible ring with a 2px offset on every interactive element.</li>
+        <li>Errors pair an icon-free text message with <code>aria-invalid</code> and <code>aria-describedby</code>.</li>
+        <li>Dialogs use native <code>&lt;dialog&gt;</code> semantics, restore focus, and close on Escape.</li>
+        <li>Reduced-motion preferences collapse transitions to near-zero duration.</li>
+        <li>Both themes target WCAG 2.2 AA contrast for text and controls.</li>
+      </ul>
+    </section>
+  </main>
+
+  <Dialog
+    id="design-dialog"
+    title="Invite a collaborator"
+    description="They will be able to review drafts but not publish until you approve."
+  >
+    <div class="form-stack">
+      <Input label="Email address" type="email" placeholder="traveler@example.com" />
+      <Select
+        label="Role"
+        options={[
+          { value: 'reviewer', label: 'Reviewer' },
+          { value: 'editor', label: 'Editor' },
+        ]}
+      />
+      <Checkbox label="Send a welcome note with the invitation" checked />
+    </div>
+    <Fragment slot="footer">
+      <Button variant="ghost" data-dialog-close>Cancel</Button>
+      <Button variant="primary">
+        <Check size={15} stroke-width={2} />
+        Send invite
+      </Button>
+    </Fragment>
+  </Dialog>
+
+  <script>
+    const buttons = document.querySelectorAll<HTMLElement>('[data-theme-toggle]');
+
+    const setTheme = (theme: string) => {
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem('tosder-preview-theme', theme);
+      for (const button of buttons) {
+        button.setAttribute(
+          'aria-pressed',
+          String(button.dataset.themeToggle === theme),
+        );
+      }
+    };
+
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        if (button.dataset.themeToggle) setTheme(button.dataset.themeToggle);
+      });
+    }
+
+    const queryTheme = new URLSearchParams(location.search).get('theme');
+    const stored = localStorage.getItem('tosder-preview-theme');
+    const initialTheme =
+      queryTheme === 'light' || queryTheme === 'admin'
+        ? queryTheme
+        : stored === 'light' || stored === 'admin'
+          ? stored
+          : null;
+
+    if (initialTheme) setTheme(initialTheme);
+  </script>
+
+  <style>
+    .page-header {
+      border-bottom: var(--border-width) solid var(--color-border);
+      background: var(--color-bg-subtle);
+    }
+
+    .page-header__inner {
+      width: min(100% - var(--space-8), var(--content-max));
+      margin: 0 auto;
+      padding: var(--space-8) 0 var(--space-10);
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: var(--space-8);
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+    }
+
+    .back-link:hover {
+      color: var(--color-text);
+    }
+
+    .page-header__row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-8);
+    }
+
+    .eyebrow {
+      margin-bottom: var(--space-2);
+      color: var(--color-text-subtle);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+    }
+
+    h1 {
+      max-width: 20ch;
+      margin-bottom: var(--space-3);
+      font-size: var(--text-4xl);
+    }
+
+    .lede {
+      max-width: 56ch;
+      color: var(--color-text-muted);
+      font-size: var(--text-lg);
+      line-height: var(--leading-relaxed);
+    }
+
+    .theme-switch {
+      display: inline-flex;
+      gap: var(--space-1);
+      padding: var(--space-1);
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      flex: none;
+    }
+
+    .theme-switch__button {
+      height: var(--control-height-sm);
+      padding: 0 var(--space-3);
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+    }
+
+    .theme-switch__button[aria-pressed='true'] {
+      background: var(--color-accent);
+      color: var(--color-accent-contrast);
+    }
+
+    .page {
+      width: min(100% - var(--space-8), var(--content-max));
+      margin: 0 auto;
+      padding: var(--space-10) 0 var(--space-12);
+    }
+
+    .section {
+      padding: var(--space-8) 0;
+      border-bottom: var(--border-width) solid var(--color-border);
+    }
+
+    .section:last-child {
+      border-bottom: 0;
+    }
+
+    .section__header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-6);
+      margin-bottom: var(--space-6);
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+    }
+
+    .section__header p {
+      max-width: 52ch;
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+      text-align: right;
+    }
+
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+      gap: var(--space-3);
+    }
+
+    .swatch {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding: var(--space-2);
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+    }
+
+    .swatch__color {
+      height: 3rem;
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--swatch-color);
+    }
+
+    .swatch__name {
+      margin-top: var(--space-1);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+    }
+
+    .swatch__token {
+      color: var(--color-text-subtle);
+      font-size: var(--text-xs);
+      overflow-wrap: anywhere;
+    }
+
+    .type-stack {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .type-display {
+      max-width: 22ch;
+      font-size: var(--text-3xl);
+      font-weight: var(--weight-semibold);
+      letter-spacing: -0.04em;
+      line-height: var(--leading-tight);
+    }
+
+    .type-heading {
+      font-size: var(--text-xl);
+      font-weight: var(--weight-semibold);
+    }
+
+    .type-body {
+      max-width: 68ch;
+      color: var(--color-text-muted);
+      font-size: var(--text-md);
+      line-height: var(--leading-relaxed);
+    }
+
+    .type-small {
+      color: var(--color-text-subtle);
+      font-size: var(--text-sm);
+    }
+
+    .type-mono {
+      color: var(--color-text-muted);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+    }
+
+    .note {
+      margin-top: var(--space-4);
+      color: var(--color-text-subtle);
+      font-size: var(--text-xs);
+      line-height: var(--leading-relaxed);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .row--tight {
+      gap: var(--space-1);
+      display: inline-flex;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+      gap: var(--space-4);
+    }
+
+    .form-stack {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .checkbox-stack {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      padding-top: var(--space-5);
+    }
+
+    .spacer {
+      height: var(--space-6);
+    }
+
+    .numeric {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .muted {
+      color: var(--color-text-muted);
+    }
+
+    .skeleton-stack {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      max-width: 32rem;
+      margin: var(--space-6) 0;
+    }
+
+    .label {
+      color: var(--color-text-subtle);
+      font-size: var(--text-xs);
+    }
+
+    .notes-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      max-width: 72ch;
+      margin: 0;
+      padding-left: var(--space-5);
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+      line-height: var(--leading-relaxed);
+    }
+
+    .notes-list code {
+      padding: 0 var(--space-1);
+      border: var(--border-width) solid var(--color-border);
+      border-radius: var(--radius-xs);
+      background: var(--color-bg-subtle);
+      font-size: var(--text-xs);
+    }
+
+    @media (max-width: 760px) {
+      .page-header__row,
+      .section__header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .section__header p {
+        text-align: left;
+      }
+    }
+  </style>
+</BaseLayout>

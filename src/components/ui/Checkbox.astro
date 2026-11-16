@@ -1,0 +1,82 @@
+---
+interface Props extends astroHTML.JSX.InputHTMLAttributes {
+  label: string;
+  hint?: string;
+  error?: string;
+}
+
+const {
+  label,
+  hint,
+  error,
+  id,
+  class: className,
+  ...rest
+} = Astro.props;
+
+const fieldId = id ?? `checkbox-${Math.random().toString(36).slice(2, 9)}`;
+const hintId = hint ? `${fieldId}-hint` : undefined;
+const errorId = error ? `${fieldId}-error` : undefined;
+const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
+---
+
+<label class:list={['checkbox', className]} for={fieldId}>
+  <input
+    id={fieldId}
+    type="checkbox"
+    class="checkbox__input"
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={describedBy}
+    {...rest}
+  />
+  <span class="checkbox__content">
+    <span class="checkbox__label">{label}</span>
+    {error ? (
+      <span class="checkbox__error" id={errorId}>{error}</span>
+    ) : (
+      hint && <span class="checkbox__hint" id={hintId}>{hint}</span>
+    )}
+  </span>
+</label>
+
+<style>
+  .checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    cursor: pointer;
+  }
+
+  .checkbox__input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0.125rem 0 0;
+    accent-color: var(--color-accent);
+    flex: none;
+  }
+
+  .checkbox__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .checkbox__label {
+    font-size: var(--text-base);
+    color: var(--color-text);
+  }
+
+  .checkbox__hint,
+  .checkbox__error {
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+  }
+
+  .checkbox__hint {
+    color: var(--color-text-subtle);
+  }
+
+  .checkbox__error {
+    color: var(--color-danger-text);
+  }
+</style>
