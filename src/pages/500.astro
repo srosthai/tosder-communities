@@ -1,0 +1,23 @@
+---
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+---
+
+<PublicPage
+  label="Error 500"
+  title="Something went wrong."
+  description="The server could not complete this request. Try again, or return to the home page."
+>
+  <div class="error-actions">
+    <PublicButton href="/">Back to home</PublicButton>
+    <PublicButton href="/status" variant="secondary">Check system status</PublicButton>
+  </div>
+</PublicPage>
+
+<style>
+  .error-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+</style>

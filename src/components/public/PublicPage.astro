@@ -1,0 +1,67 @@
+---
+import PublicLayout from '../../layouts/PublicLayout.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  label?: string;
+}
+
+const {
+  title,
+  description,
+  label,
+} = Astro.props;
+---
+
+<PublicLayout title={`${title} — Tosder Communities`}>
+  <section class="page">
+    <div class="container">
+      <header class="page-header">
+        {label && <p class="label">{label}</p>}
+        <h1>{title}</h1>
+        {description && <p class="description">{description}</p>}
+        <slot name="actions" />
+      </header>
+      <slot />
+    </div>
+  </section>
+</PublicLayout>
+
+<style>
+  .page {
+    padding: clamp(var(--space-8), 8vw, 5rem) 0 clamp(var(--space-10), 10vw, 6rem);
+  }
+
+  .container {
+    width: min(100% - var(--space-8), 68rem);
+    margin: 0 auto;
+  }
+
+  .page-header {
+    max-width: 62ch;
+    margin-bottom: var(--space-8);
+  }
+
+  .label {
+    margin-bottom: var(--space-3);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  h1 {
+    margin-bottom: var(--space-3);
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.045em;
+    line-height: 1.05;
+  }
+
+  .description {
+    max-width: 58ch;
+    color: var(--color-text-muted);
+    font-size: var(--text-lg);
+    line-height: var(--leading-relaxed);
+  }
+</style>

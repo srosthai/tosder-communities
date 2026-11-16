@@ -1,0 +1,20 @@
+---
+import { UserPlus } from '@lucide/astro';
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+---
+
+<PublicPage
+  label="Account"
+  title="Create an account"
+  description="One account will be both traveler and creator. No permanent account type, no second profile."
+>
+  <EmptyState
+    title="Registration is next"
+    description="The member workspace is being built on Neon Auth. Until then, explore the design system and admin preview."
+  >
+    <UserPlus slot="icon" size={20} stroke-width={1.75} />
+    <PublicButton href="/design">View the design system</PublicButton>
+  </EmptyState>
+</PublicPage>

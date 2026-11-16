@@ -1,0 +1,23 @@
+---
+import { Compass } from '@lucide/astro';
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+import Badge from '../components/ui/Badge.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+---
+
+<PublicPage
+  label="Explore"
+  title="Find a place worth the detour."
+  description="Search and filter Cambodia's provinces, destinations, and practical travel notes. The catalog and map are being prepared."
+>
+  <Badge slot="actions" variant="info">In build</Badge>
+
+  <EmptyState
+    title="The destination catalog is being prepared"
+    description="Reviewed provinces, destinations, coordinates, and photography are the next milestone. The admin content preview already shows the model."
+  >
+    <Compass slot="icon" size={20} stroke-width={1.75} />
+    <PublicButton href="/">Back to home</PublicButton>
+  </EmptyState>
+</PublicPage>

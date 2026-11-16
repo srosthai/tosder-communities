@@ -1,0 +1,23 @@
+---
+import { LayoutTemplate } from '@lucide/astro';
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+import Badge from '../components/ui/Badge.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+---
+
+<PublicPage
+  label="Travel templates"
+  title="Reusable itineraries, not generic listicles."
+  description="Browse day-by-day plans with maps, practical notes, and a clear source. The first reviewed templates are on the way."
+>
+  <Badge slot="actions" variant="info">In build</Badge>
+
+  <EmptyState
+    title="The first templates are being reviewed"
+    description="Creators can build a draft in the admin preview. Public publishing opens after the creator workflow and moderation pass."
+  >
+    <LayoutTemplate slot="icon" size={20} stroke-width={1.75} />
+    <PublicButton href="/admin">Open admin preview</PublicButton>
+  </EmptyState>
+</PublicPage>
