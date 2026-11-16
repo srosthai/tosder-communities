@@ -1,4 +1,4 @@
-# Tosder
+# Tosder Communities
 
 Cambodia travel community platform — discover destinations, create reusable itineraries, and share travel templates.
 
@@ -12,7 +12,7 @@ Pre-implementation. The product flow is documented in [`cambodia_travel_platform
 - Nitro API
 - Supabase (PostgreSQL, Auth, Storage)
 - Prisma ORM
-- MapLibre + PostGIS
+- Leaflet + PostGIS
 
 ## Development
 
