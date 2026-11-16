@@ -1,15 +1,19 @@
+import { DATABASE_URL } from 'astro:env/server';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 let prisma: PrismaClient | undefined;
 
 export function isDatabaseConfigured(): boolean {
-  const url = import.meta.env.DATABASE_URL;
-  return Boolean(url && !url.includes('REPLACE_ME') && !url.includes('[YOUR-PASSWORD]'));
+  return Boolean(
+    DATABASE_URL &&
+      !DATABASE_URL.includes('REPLACE_ME') &&
+      !DATABASE_URL.includes('[YOUR-PASSWORD]'),
+  );
 }
 
 export function getPrisma(): PrismaClient {
-  const url = import.meta.env.DATABASE_URL;
+  const url = DATABASE_URL;
 
   if (!url || !isDatabaseConfigured()) {
     throw new Error(

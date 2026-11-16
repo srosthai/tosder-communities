@@ -1,20 +1,115 @@
 ---
-import { UserRound } from '@lucide/astro';
 import PublicPage from '../components/public/PublicPage.astro';
-import PublicButton from '../components/public/PublicButton.astro';
-import EmptyState from '../components/ui/EmptyState.astro';
+import AuthCard from '../components/public/AuthCard.astro';
+import Input from '../components/ui/Input.astro';
+import Button from '../components/ui/Button.astro';
+import { getAuthForRequest, safeRedirect } from '../lib/auth-server';
+
+export const prerender = false;
+
+let errorMessage: string | null = null;
+let email = '';
+const redirectTo = safeRedirect(
+  Astro.url.searchParams.get('redirectTo') ?? '/account',
+);
+
+const auth = getAuthForRequest(Astro);
+let existingUser = null;
+
+try {
+  const existing = await auth.getSession();
+  existingUser = existing.data?.user ?? null;
+} catch {
+  existingUser = null;
+}
+
+if (existingUser && Astro.request.method !== 'POST') {
+  return Astro.redirect(redirectTo);
+}
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim();
+  const password = String(form.get('password') ?? '');
+  const target = safeRedirect(form.get('redirectTo') ?? redirectTo);
+
+  if (!email || !password) {
+    errorMessage = 'Enter your email and password.';
+  } else {
+    const result = await auth.signIn.email({ email, password });
+    if (result.error) {
+      errorMessage =
+        result.error.message === 'Invalid email or password'
+          ? 'That email and password do not match.'
+          : result.error.message ?? 'Unable to sign in. Try again.';
+    } else {
+      return Astro.redirect(target);
+    }
+  }
+}
 ---
 
 <PublicPage
   label="Account"
   title="Sign in"
-  description="Member accounts, saved places, and private trip copies are part of the member workspace build."
+  description="Return to your trips, saved places, and creator workspace."
 >
-  <EmptyState
-    title="Accounts are not open yet"
-    description="Authentication is the next foundation task. The public site stays readable without an account."
-  >
-    <UserRound slot="icon" size={20} stroke-width={1.75} />
-    <PublicButton href="/">Back to home</PublicButton>
-  </EmptyState>
+  <AuthCard error={errorMessage}>
+    <form method="post" class="auth-form">
+      <input type="hidden" name="redirectTo" value={redirectTo} />
+      <Input
+        label="Email address"
+        name="email"
+        type="email"
+        autocomplete="email"
+        placeholder="you@example.com"
+        value={email}
+        required
+      />
+      <Input
+        label="Password"
+        name="password"
+        type="password"
+        autocomplete="current-password"
+        required
+      />
+      <Button type="submit" variant="primary" block>Sign in</Button>
+    </form>
+    <div class="auth-links">
+      <a href="/forgot-password">Forgot password?</a>
+      <span>New here? <a href={`/sign-up?redirectTo=${encodeURIComponent(redirectTo)}`}>Create an account</a></span>
+    </div>
+  </AuthCard>
 </PublicPage>
+
+<style>
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .auth-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .auth-links a {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-decoration-color: var(--color-text-subtle);
+    text-underline-offset: 2px;
+  }
+
+  .auth-links a:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+</style>

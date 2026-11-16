@@ -2,6 +2,7 @@
 import { ArrowRight, Menu, Moon, Sun, X } from '@lucide/astro';
 import BaseLayout from './BaseLayout.astro';
 import BrandLogo from '../components/BrandLogo.astro';
+import { getAuthForRequest } from '../lib/auth-server';
 
 interface Props {
   title: string;
@@ -12,8 +13,32 @@ interface Props {
 const {
   title,
   description = 'Discover Cambodia, create reusable itineraries, and share travel templates.',
-  user = null,
+  user: providedUser = null,
 } = Astro.props;
+
+const cookieHeader = Astro.request.headers.get('cookie') ?? '';
+let user = providedUser;
+
+if (!user && cookieHeader) {
+  try {
+    const auth = getAuthForRequest(Astro);
+    const { data } = await auth.getSession();
+    if (data?.user) {
+      user = {
+        name: data.user.name,
+        initials: data.user.name
+          .split(' ')
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((part) => part[0])
+          .join('')
+          .toUpperCase(),
+      };
+    }
+  } catch {
+    user = providedUser;
+  }
+}
 
 const navItems = [
   { label: 'Explore', href: '/explore' },
@@ -49,7 +74,7 @@ const navItems = [
         </button>
 
         {user ? (
-          <a class="account" href="/admin">
+          <a class="account" href="/account">
             <span class="avatar" aria-hidden="true">{user.initials ?? user.name.slice(0, 2).toUpperCase()}</span>
             <span>{user.name}</span>
           </a>
@@ -94,7 +119,7 @@ const navItems = [
     </nav>
     <div class="mobile-menu__actions">
       {user ? (
-        <a class="cta" href="/admin">Open admin</a>
+        <a class="cta" href="/account">Open account</a>
       ) : (
         <>
           <a class="signin" href="/sign-in">Sign in</a>

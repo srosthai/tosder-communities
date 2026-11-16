@@ -1,0 +1,175 @@
+---
+import PublicPage from '../components/public/PublicPage.astro';
+import AuthCard from '../components/public/AuthCard.astro';
+import Input from '../components/ui/Input.astro';
+import Button from '../components/ui/Button.astro';
+import { getAuthForRequest } from '../lib/auth-server';
+
+export const prerender = false;
+
+let errorMessage: string | null = null;
+let sent = false;
+let email = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? 'send');
+  email = String(form.get('email') ?? '').trim();
+
+  if (!email) {
+    errorMessage = 'Enter the email address for your account.';
+  } else {
+    const auth = getAuthForRequest(Astro);
+    const emailOtp = auth.emailOtp as
+      | {
+          sendVerificationOtp: (input: {
+            email: string;
+            type: 'email-verification';
+          }) => Promise<{ error: { message?: string } | null }>;
+          verifyEmail: (input: {
+            email: string;
+            otp: string;
+          }) => Promise<{ error: { message?: string } | null }>;
+        }
+      | undefined;
+
+    if (!emailOtp) {
+      errorMessage = 'Email verification is temporarily unavailable.';
+    } else if (intent === 'verify') {
+      const otp = String(form.get('otp') ?? '').trim();
+      if (!otp) {
+        errorMessage = 'Enter the verification code from your email.';
+      } else {
+        const result = await emailOtp.verifyEmail({ email, otp });
+        if (result.error) {
+          errorMessage = result.error.message ?? 'That code did not work.';
+        } else {
+          return Astro.redirect('/account');
+        }
+      }
+    } else {
+      const result = await emailOtp.sendVerificationOtp({
+        email,
+        type: 'email-verification',
+      });
+      if (result.error) {
+        errorMessage = result.error.message ?? 'Unable to send the code.';
+      } else {
+        sent = true;
+      }
+    }
+  }
+}
+---
+
+<PublicPage
+  label="Account"
+  title="Verify your email"
+  description="Verification is required before publishing a template. Browsing and saving do not require it."
+>
+  <AuthCard error={errorMessage}>
+    {sent && (
+      <p class="sent" role="status">
+        A verification code is on its way. Enter it below when it arrives.
+      </p>
+    )}
+
+    <form method="post" class="auth-form">
+      <input type="hidden" name="intent" value="send" />
+      <Input
+        label="Email address"
+        name="email"
+        type="email"
+        autocomplete="email"
+        placeholder="you@example.com"
+        value={email}
+        required
+      />
+      <Button type="submit" variant="secondary" block>Send verification code</Button>
+    </form>
+
+    <div class="divider"><span>Already have a code?</span></div>
+
+    <form method="post" class="auth-form">
+      <input type="hidden" name="intent" value="verify" />
+      <Input
+        label="Email address"
+        name="email"
+        type="email"
+        autocomplete="email"
+        placeholder="you@example.com"
+        value={email}
+        required
+      />
+      <Input
+        label="Verification code"
+        name="otp"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        placeholder="123456"
+        required
+      />
+      <Button type="submit" variant="primary" block>Verify email</Button>
+    </form>
+
+    <div class="auth-links">
+      <a href="/account">Back to account</a>
+      <a href="/sign-in">Sign in</a>
+    </div>
+  </AuthCard>
+</PublicPage>
+
+<style>
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .sent {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-subtle);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: var(--space-5) 0;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .divider::before,
+  .divider::after {
+    height: 1px;
+    flex: 1;
+    background: var(--color-border);
+    content: '';
+  }
+
+  .auth-links {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .auth-links a {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-decoration-color: var(--color-text-subtle);
+    text-underline-offset: 2px;
+  }
+</style>

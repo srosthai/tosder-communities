@@ -1,20 +1,137 @@
 ---
-import { UserPlus } from '@lucide/astro';
 import PublicPage from '../components/public/PublicPage.astro';
-import PublicButton from '../components/public/PublicButton.astro';
-import EmptyState from '../components/ui/EmptyState.astro';
+import AuthCard from '../components/public/AuthCard.astro';
+import Input from '../components/ui/Input.astro';
+import Button from '../components/ui/Button.astro';
+import { getAuthForRequest, safeRedirect } from '../lib/auth-server';
+
+export const prerender = false;
+
+let errorMessage: string | null = null;
+let name = '';
+let email = '';
+const redirectTo = safeRedirect(
+  Astro.url.searchParams.get('redirectTo') ?? '/account',
+);
+
+const auth = getAuthForRequest(Astro);
+let existingUser = null;
+
+try {
+  const existing = await auth.getSession();
+  existingUser = existing.data?.user ?? null;
+} catch {
+  existingUser = null;
+}
+
+if (existingUser && Astro.request.method !== 'POST') {
+  return Astro.redirect(redirectTo);
+}
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  name = String(form.get('name') ?? '').trim();
+  email = String(form.get('email') ?? '').trim();
+  const password = String(form.get('password') ?? '');
+  const confirm = String(form.get('confirm') ?? '');
+  const target = safeRedirect(form.get('redirectTo') ?? redirectTo);
+
+  if (!name || !email || !password) {
+    errorMessage = 'Enter your name, email, and password.';
+  } else if (password.length < 8) {
+    errorMessage = 'Use at least 8 characters for your password.';
+  } else if (password !== confirm) {
+    errorMessage = 'The passwords do not match.';
+  } else {
+    const result = await auth.signUp.email({
+      name,
+      email,
+      password,
+      callbackURL: target,
+    });
+
+    if (result.error) {
+      errorMessage = result.error.message ?? 'Unable to create the account.';
+    } else {
+      return Astro.redirect(target);
+    }
+  }
+}
 ---
 
 <PublicPage
   label="Account"
   title="Create an account"
-  description="One account will be both traveler and creator. No permanent account type, no second profile."
+  description="One account is both traveler and creator. No permanent account type, no second profile."
 >
-  <EmptyState
-    title="Registration is next"
-    description="The member workspace is being built on Neon Auth. Until then, explore the design system and admin preview."
-  >
-    <UserPlus slot="icon" size={20} stroke-width={1.75} />
-    <PublicButton href="/design">View the design system</PublicButton>
-  </EmptyState>
+  <AuthCard error={errorMessage}>
+    <form method="post" class="auth-form">
+      <input type="hidden" name="redirectTo" value={redirectTo} />
+      <Input
+        label="Display name"
+        name="name"
+        type="text"
+        autocomplete="name"
+        placeholder="Your name"
+        value={name}
+        required
+      />
+      <Input
+        label="Email address"
+        name="email"
+        type="email"
+        autocomplete="email"
+        placeholder="you@example.com"
+        value={email}
+        required
+      />
+      <Input
+        label="Password"
+        name="password"
+        type="password"
+        autocomplete="new-password"
+        hint="At least 8 characters."
+        required
+      />
+      <Input
+        label="Confirm password"
+        name="confirm"
+        type="password"
+        autocomplete="new-password"
+        required
+      />
+      <Button type="submit" variant="primary" block>Create account</Button>
+    </form>
+    <div class="auth-links">
+      <span>Already have an account? <a href={`/sign-in?redirectTo=${encodeURIComponent(redirectTo)}`}>Sign in</a></span>
+    </div>
+  </AuthCard>
 </PublicPage>
+
+<style>
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .auth-links {
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .auth-links a {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-decoration-color: var(--color-text-subtle);
+    text-underline-offset: 2px;
+  }
+
+  .auth-links a:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+</style>

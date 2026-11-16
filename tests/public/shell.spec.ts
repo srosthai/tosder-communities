@@ -98,6 +98,10 @@ test.describe('public shell', () => {
         '/templates',
         '/leaderboard',
         '/sign-in',
+        '/sign-up',
+        '/forgot-password',
+        '/reset-password',
+        '/verify-email',
         '/status',
       ]) {
         await page.goto(route);

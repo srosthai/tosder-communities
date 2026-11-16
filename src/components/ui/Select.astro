@@ -22,8 +22,8 @@ const errorId = error ? `${fieldId}-error` : undefined;
 const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
 ---
 
-<label class="field" for={fieldId}>
-  {label && <span class="field__label">{label}</span>}
+<div class="field">
+  {label && <label class="field__label" for={fieldId}>{label}</label>}
   <select
     id={fieldId}
     class:list={['select', { 'select--error': Boolean(error) }, className]}
@@ -42,7 +42,7 @@ const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
   ) : (
     hint && <span class="field__hint" id={hintId}>{hint}</span>
   )}
-</label>
+</div>
 
 <style>
   .field {
