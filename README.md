@@ -27,6 +27,14 @@ Set `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) in `.env.local` to your Ne
 
 The Neon project is linked in `.neon`.
 
+### Admin UI
+
+- `/admin` — dashboard, content, templates, users, moderation, competitions, rewards, and audit
+- `/admin/content` — searchable, filterable, paginated data table
+- `/design` — design tokens and component reference
+
+The admin shell supports dark and light themes; the choice is stored locally.
+
 ### API checks
 
 - `GET /api/health` — app, Neon, and Prisma status

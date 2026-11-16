@@ -1,0 +1,209 @@
+---
+import { Banknote, ChevronDown, CircleCheck, Clock, Download, Plus, Wallet } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import DataTable from '../../components/admin/DataTable.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+
+const rewards = [
+  { recipient: 'Sokha Meas', competition: 'October 2026', rank: '1st', amount: '$200', status: 'Paid', method: 'Bank transfer', reference: 'PAY-1042', date: 'Nov 4, 2026', initials: 'SM' },
+  { recipient: 'Vannak Heng', competition: 'October 2026', rank: '2nd', amount: '$120', status: 'Awaiting approval', method: 'Bank transfer', reference: '—', date: '—', initials: 'VH' },
+  { recipient: 'Dara Lim', competition: 'October 2026', rank: '3rd', amount: '$80', status: 'Payable', method: 'Bank transfer', reference: '—', date: '—', initials: 'DL' },
+  { recipient: 'Malis Chhay', competition: 'October 2026', rank: '4th', amount: '$50', status: 'Payable', method: 'Bank transfer', reference: '—', date: '—', initials: 'MC' },
+  { recipient: 'Pisey Nou', competition: 'October 2026', rank: '5th', amount: '$50', status: 'Paid', method: 'Bank transfer', reference: 'PAY-1039', date: 'Nov 3, 2026', initials: 'PN' },
+  { recipient: 'Bopha Sok', competition: 'September 2026', rank: '4th', amount: '$50', status: 'Paid', method: 'Bank transfer', reference: 'PAY-1021', date: 'Oct 2, 2026', initials: 'BS' },
+  { recipient: 'Chanthou Ith', competition: 'September 2026', rank: '5th', amount: '$50', status: 'Paid', method: 'Bank transfer', reference: 'PAY-1018', date: 'Oct 2, 2026', initials: 'CI' },
+  { recipient: 'Kosal Tan', competition: 'September 2026', rank: '3rd', amount: '$80', status: 'Void', method: '—', reference: '—', date: 'Sep 30, 2026', initials: 'KT' },
+];
+
+const statusVariant = (status: string) =>
+  status === 'Paid'
+    ? 'success'
+    : status === 'Payable'
+      ? 'info'
+      : status === 'Awaiting approval'
+        ? 'warning'
+        : 'neutral';
+---
+
+<AdminLayout title="Rewards">
+  <PageHeader
+    title="Rewards"
+    description="Approve prize allocations and record manual payouts with a full audit trail."
+  />
+
+  <div class="reward-stats">
+    <StatCard label="Awaiting approval" value="$120" hint="1 reward" trend="Action needed" tone="warning">
+      <Clock slot="icon" size={16} stroke-width={1.75} />
+    </StatCard>
+    <StatCard label="Payable" value="$180" hint="3 rewards" trend="Ready to pay" tone="positive">
+      <Banknote slot="icon" size={16} stroke-width={1.75} />
+    </StatCard>
+    <StatCard label="Paid this month" value="$500" hint="5 payouts" trend="Reconciled" tone="positive">
+      <CircleCheck slot="icon" size={16} stroke-width={1.75} />
+    </StatCard>
+  </div>
+
+  <DataTable
+    title="Payout ledger"
+    description="Manual payouts only. Every status change is recorded."
+    headingLevel="h2"
+    searchPlaceholder="Search by recipient or reference…"
+    filters={[
+      { label: 'Paid', value: 'paid' },
+      { label: 'Payable', value: 'payable' },
+      { label: 'Awaiting approval', value: 'awaiting-approval' },
+      { label: 'Void', value: 'void' },
+    ]}
+  >
+    <Wallet slot="icon" size={18} stroke-width={1.75} />
+    <Fragment slot="actions">
+      <Button variant="secondary" size="sm">
+        <Download size={14} stroke-width={1.75} />
+        Export ledger
+      </Button>
+      <Button variant="primary" size="sm">
+        <Plus size={14} stroke-width={2} />
+        Record payout
+      </Button>
+    </Fragment>
+
+    <thead>
+      <tr>
+        <th scope="col">Recipient</th>
+        <th scope="col">Competition</th>
+        <th scope="col">Rank</th>
+        <th scope="col">Amount</th>
+        <th scope="col">Status</th>
+        <th scope="col">Method</th>
+        <th scope="col">Reference</th>
+        <th scope="col">Date</th>
+        <th scope="col"><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {rewards.map((reward) => (
+        <tr
+          data-search={`${reward.recipient} ${reward.competition} ${reward.status} ${reward.reference}`}
+          data-filter={reward.status.toLowerCase().replaceAll(' ', '-')}
+        >
+          <td>
+            <span class="cell-main">
+              <span class="member-avatar" aria-hidden="true">{reward.initials}</span>
+              <span class="cell-copy">
+                <strong>{reward.recipient}</strong>
+                <span>{reward.competition}</span>
+              </span>
+            </span>
+          </td>
+          <td class="muted">{reward.competition}</td>
+          <td class="numeric">{reward.rank}</td>
+          <td class="numeric"><strong>{reward.amount}</strong></td>
+          <td><Badge variant={statusVariant(reward.status)} dot>{reward.status}</Badge></td>
+          <td class="muted">{reward.method}</td>
+          <td class="mono">{reward.reference}</td>
+          <td class="muted">{reward.date}</td>
+          <td class="actions">
+            <a class="table-action" href={`/admin/rewards?reward=${reward.reference}`}>
+              Open <ChevronDown size={12} stroke-width={1.75} />
+            </a>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </DataTable>
+
+  <p class="page-note">Payouts are manual in the MVP. Every approval and status change is audited.</p>
+</AdminLayout>
+
+<style>
+  .reward-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .cell-main {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 12rem;
+  }
+
+  .member-avatar {
+    display: inline-grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+  }
+
+  .cell-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .cell-copy strong {
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+  }
+
+  .cell-copy span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .muted {
+    color: var(--color-text-muted);
+  }
+
+  .mono {
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .actions {
+    text-align: right;
+  }
+
+  .table-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .table-action:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .page-note {
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  @media (max-width: 900px) {
+    .reward-stats {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

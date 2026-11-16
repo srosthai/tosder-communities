@@ -1,0 +1,296 @@
+---
+import { ArrowUpRight, CalendarDays, Plus, Settings2 } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import Panel from '../../components/admin/Panel.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+import Table from '../../components/ui/Table.astro';
+
+const leaderboard = [
+  { rank: '01', creator: 'Sokha Meas', uses: '184', prize: '$200', status: 'Provisional' },
+  { rank: '02', creator: 'Vannak Heng', uses: '142', prize: '$120', status: 'Provisional' },
+  { rank: '03', creator: 'Dara Lim', uses: '117', prize: '$80', status: 'Provisional' },
+  { rank: '04', creator: 'Malis Chhay', uses: '96', prize: '$50', status: 'Provisional' },
+  { rank: '05', creator: 'Pisey Nou', uses: '81', prize: '$50', status: 'Provisional' },
+];
+
+const prizes = [
+  { label: '1st', amount: '$200' },
+  { label: '2nd', amount: '$120' },
+  { label: '3rd', amount: '$80' },
+  { label: '4th', amount: '$50' },
+  { label: '5th', amount: '$50' },
+];
+---
+
+<AdminLayout title="Competitions">
+  <PageHeader
+    title="Competitions"
+    description="Configure the monthly Top 5, publish the rules before the period starts, and finalize results fairly."
+  >
+    <Button variant="secondary">
+      <CalendarDays size={15} stroke-width={1.75} />
+      Past competitions
+    </Button>
+    <Button variant="primary">
+      <Plus size={15} stroke-width={2} />
+      New competition
+    </Button>
+  </PageHeader>
+
+  <div class="competition-grid">
+    <Panel title="November 2026" description="Active · 21 of 30 days elapsed">
+      <Badge slot="action" variant="warning" dot>Provisional</Badge>
+      <div class="competition-facts">
+        <div>
+          <span>Period</span>
+          <strong>Nov 1 – Nov 30, 2026</strong>
+        </div>
+        <div>
+          <span>Timezone</span>
+          <strong>Asia/Phnom Penh</strong>
+        </div>
+        <div>
+          <span>Prize pool</span>
+          <strong>$500</strong>
+        </div>
+        <div>
+          <span>Funding source</span>
+          <strong>Platform budget</strong>
+        </div>
+      </div>
+      <div class="progress" role="img" aria-label="Competition period is 70 percent complete.">
+        <span class="progress__bar" style="--progress: 70%"></span>
+      </div>
+      <div class="competition-footer">
+        <span>Closes in 9 days</span>
+        <a class="panel-link" href="/admin/competitions?tab=rules">
+          View public rules <ArrowUpRight size={13} stroke-width={1.75} />
+        </a>
+      </div>
+    </Panel>
+
+    <Panel title="Prize configuration" description="Admin-configurable example pool">
+      <Button slot="action" variant="ghost" size="sm">
+        <Settings2 size={14} stroke-width={1.75} />
+        Edit
+      </Button>
+      <div class="prize-list">
+        {prizes.map((prize) => (
+          <div class="prize-row">
+            <span class="prize-rank">{prize.label}</span>
+            <span class="prize-amount">{prize.amount}</span>
+          </div>
+        ))}
+      </div>
+      <div class="prize-total">
+        <span>Total prize pool</span>
+        <strong>$500</strong>
+      </div>
+      <p class="prize-note">Payouts are manual and require administrator approval.</p>
+    </Panel>
+  </div>
+
+  <Panel title="Provisional leaderboard" description="Ranked by qualified uses in the current period">
+    <a slot="action" class="panel-link" href="/admin/rewards">
+      Reward ledger <ArrowUpRight size={13} stroke-width={1.75} />
+    </a>
+    <Table>
+      <thead>
+        <tr>
+          <th scope="col">Rank</th>
+          <th scope="col">Creator</th>
+          <th scope="col">Qualified uses</th>
+          <th scope="col">Prize</th>
+          <th scope="col">Status</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {leaderboard.map((entry) => (
+          <tr>
+            <td><span class="rank">{entry.rank}</span></td>
+            <td><strong>{entry.creator}</strong></td>
+            <td class="numeric">{entry.uses}</td>
+            <td class="numeric">{entry.prize}</td>
+            <td><Badge variant="warning">{entry.status}</Badge></td>
+            <td class="actions"><a class="table-action" href={`/admin/competitions?creator=${entry.creator.toLowerCase().replaceAll(' ', '-')}`}>View</a></td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  </Panel>
+
+  <p class="page-note">Rankings freeze at close. Late events follow the documented correction process.</p>
+</AdminLayout>
+
+<style>
+  .competition-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    align-items: start;
+  }
+
+  .competition-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    padding-bottom: var(--space-4);
+  }
+
+  .competition-facts span {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .competition-facts strong {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .progress {
+    height: 4px;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    overflow: hidden;
+  }
+
+  .progress__bar {
+    display: block;
+    width: var(--progress);
+    height: 100%;
+    border-radius: inherit;
+    background: var(--chart-3);
+  }
+
+  .competition-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .panel-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .panel-link:hover {
+    color: var(--color-text);
+  }
+
+  .prize-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .prize-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 1.75rem;
+    padding: 0 var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
+    font-size: var(--text-xs);
+  }
+
+  .prize-row:last-child {
+    border-bottom: 0;
+  }
+
+  .prize-rank {
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .prize-amount {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .prize-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--space-2);
+    padding-top: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+    font-size: var(--text-xs);
+  }
+
+  .prize-total strong {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .prize-note {
+    margin-top: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions {
+    text-align: right;
+  }
+
+  .table-action {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .table-action:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .page-note {
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  @media (max-width: 1100px) {
+    .competition-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .competition-facts {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

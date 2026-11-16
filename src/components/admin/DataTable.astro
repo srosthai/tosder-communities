@@ -1,0 +1,709 @@
+---
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Funnel,
+  Search,
+} from '@lucide/astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  searchPlaceholder?: string;
+  filters?: Array<{ label: string; value: string }>;
+  pageSize?: number;
+  headingLevel?: 'h1' | 'h2';
+  class?: string;
+}
+
+const {
+  title,
+  description,
+  searchPlaceholder = 'Search…',
+  filters = [],
+  pageSize = 10,
+  headingLevel = 'h1',
+  class: className,
+} = Astro.props;
+
+const hasIcon = Astro.slots.has('icon');
+const hasActions = Astro.slots.has('actions');
+const id = `datatable-${Math.random().toString(36).slice(2, 9)}`;
+const pageSizes = [5, 10, 25, 50];
+---
+
+<section class:list={['datatable', className]} data-datatable>
+  <header class="datatable__header">
+    <div class="datatable__identity">
+      {hasIcon && (
+        <span class="datatable__icon" aria-hidden="true">
+          <slot name="icon" />
+        </span>
+      )}
+      <div class="datatable__heading">
+        {headingLevel === 'h1' ? (
+          <h1 class="datatable__title">{title}</h1>
+        ) : (
+          <h2 class="datatable__title">{title}</h2>
+        )}
+        {description && <p class="datatable__description">{description}</p>}
+      </div>
+    </div>
+    {hasActions && (
+      <div class="datatable__actions">
+        <slot name="actions" />
+      </div>
+    )}
+  </header>
+
+  <div class="datatable__toolbar">
+    <label class="datatable__search">
+      <Search size={14} stroke-width={1.75} aria-hidden="true" />
+      <span class="sr-only">{searchPlaceholder}</span>
+      <input
+        type="search"
+        placeholder={searchPlaceholder}
+        autocomplete="off"
+        data-datatable-search
+      />
+    </label>
+
+    <slot name="toolbar" />
+
+    {filters.length > 0 && (
+      <div class="datatable__filter">
+        <button
+          type="button"
+          class="datatable__filter-button"
+          data-datatable-filter-toggle
+          aria-label="Filter"
+          aria-expanded="false"
+          aria-controls={`${id}-filters`}
+        >
+          <Funnel size={14} stroke-width={1.75} aria-hidden="true" />
+          Filter
+          <span class="datatable__filter-count" data-datatable-filter-count aria-hidden="true" hidden>0</span>
+        </button>
+        <div
+          class="datatable__filter-panel"
+          id={`${id}-filters`}
+          data-datatable-filter-panel
+          role="group"
+          aria-label="Funnel table"
+          hidden
+        >
+          <p class="datatable__filter-label">Show only</p>
+          {filters.map((filter) => (
+            <label class="datatable__filter-option">
+              <input type="checkbox" value={filter.value} data-datatable-filter />
+              <span>{filter.label}</span>
+            </label>
+          ))}
+          <button type="button" class="datatable__filter-clear" data-datatable-filter-clear>
+            Clear filters
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+
+  <div class="datatable__table-wrap">
+    <table class="datatable__table">
+      <slot />
+    </table>
+    <div class="datatable__empty" data-datatable-empty hidden>
+      <p>No results</p>
+      <span>Try a different search or clear the filters.</span>
+    </div>
+  </div>
+
+  <footer class="datatable__footer">
+    <label class="datatable__page-size">
+      <span>Per page</span>
+      <select data-datatable-page-size aria-label="Rows per page">
+        {pageSizes.map((size) => (
+          <option value={size} selected={size === pageSize}>{size}</option>
+        ))}
+      </select>
+    </label>
+
+    <span class="datatable__range" data-datatable-range aria-live="polite"></span>
+
+    <div class="datatable__pager">
+      <span class="datatable__page-label" data-datatable-page aria-live="polite">Page 1 of 1</span>
+      <div class="datatable__pager-buttons">
+        <button type="button" data-datatable-first aria-label="First page">
+          <ChevronsLeft size={14} stroke-width={1.75} />
+        </button>
+        <button type="button" data-datatable-prev aria-label="Previous page">
+          <ChevronLeft size={14} stroke-width={1.75} />
+        </button>
+        <button type="button" data-datatable-next aria-label="Next page">
+          <ChevronRight size={14} stroke-width={1.75} />
+        </button>
+        <button type="button" data-datatable-last aria-label="Last page">
+          <ChevronsRight size={14} stroke-width={1.75} />
+        </button>
+      </div>
+    </div>
+  </footer>
+</section>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-datatable]').forEach((root) => {
+    const tbody = root.querySelector('tbody');
+    const rows = Array.from(tbody?.querySelectorAll<HTMLTableRowElement>('tr') ?? []);
+    const search = root.querySelector<HTMLInputElement>('[data-datatable-search]');
+    const pageSizeSelect = root.querySelector<HTMLSelectElement>('[data-datatable-page-size]');
+    const filterToggle = root.querySelector<HTMLButtonElement>('[data-datatable-filter-toggle]');
+    const filterPanel = root.querySelector<HTMLElement>('[data-datatable-filter-panel]');
+    const filterInputs = Array.from(
+      root.querySelectorAll<HTMLInputElement>('[data-datatable-filter]'),
+    );
+    const filterCount = root.querySelector<HTMLElement>('[data-datatable-filter-count]');
+    const filterClear = root.querySelector<HTMLButtonElement>('[data-datatable-filter-clear]');
+    const selectControls = Array.from(
+      root.querySelectorAll<HTMLElement>('[data-datatable-select]'),
+    );
+    const empty = root.querySelector<HTMLElement>('[data-datatable-empty]');
+    const range = root.querySelector<HTMLElement>('[data-datatable-range]');
+    const pageLabel = root.querySelector<HTMLElement>('[data-datatable-page]');
+    const first = root.querySelector<HTMLButtonElement>('[data-datatable-first]');
+    const prev = root.querySelector<HTMLButtonElement>('[data-datatable-prev]');
+    const next = root.querySelector<HTMLButtonElement>('[data-datatable-next]');
+    const last = root.querySelector<HTMLButtonElement>('[data-datatable-last]');
+
+    let page = 1;
+    let pageSize = Number(pageSizeSelect?.value ?? 10);
+    let query = '';
+    const selectedFilters = new Set<string>();
+    const selectValues = new Map<string, string>();
+
+    selectControls.forEach((select) => {
+      const name = select.dataset.datatableSelect;
+      const input = select.querySelector<HTMLInputElement>('input[type="hidden"]');
+      if (name) selectValues.set(name, input?.value ?? '');
+    });
+
+    const matches = (row: HTMLTableRowElement) => {
+      const text = (row.dataset.search ?? row.textContent ?? '').toLowerCase();
+      const term = query.trim().toLowerCase();
+      const matchesQuery = term.length === 0 || text.includes(term);
+      const rowFilters = (row.dataset.filter ?? '').split(/\s+/).filter(Boolean);
+      const matchesFilters =
+        selectedFilters.size === 0 ||
+        rowFilters.some((value) => selectedFilters.has(value));
+
+      let matchesSelects = true;
+      selectValues.forEach((value, name) => {
+        if (value && (row.dataset[name] ?? '') !== value) matchesSelects = false;
+      });
+
+      return matchesQuery && matchesFilters && matchesSelects;
+    };
+
+    const updateFilterCount = () => {
+      if (!filterCount) return;
+      filterCount.textContent = String(selectedFilters.size);
+      filterCount.hidden = selectedFilters.size === 0;
+    };
+
+    const render = () => {
+      const matched = rows.filter(matches);
+      const totalPages = Math.max(1, Math.ceil(matched.length / pageSize));
+      page = Math.min(page, totalPages);
+
+      const start = (page - 1) * pageSize;
+      const visible = new Set(matched.slice(start, start + pageSize));
+
+      rows.forEach((row) => {
+        row.hidden = !visible.has(row);
+      });
+
+      if (empty) empty.hidden = matched.length !== 0;
+      if (range) {
+        range.textContent =
+          matched.length === 0
+            ? '0 of 0'
+            : `${start + 1}–${Math.min(start + pageSize, matched.length)} of ${matched.length}`;
+      }
+      if (pageLabel) pageLabel.textContent = `Page ${page} of ${totalPages}`;
+
+      if (first) first.disabled = page <= 1;
+      if (prev) prev.disabled = page <= 1;
+      if (next) next.disabled = page >= totalPages;
+      if (last) last.disabled = page >= totalPages;
+    };
+
+    const closeFilters = () => {
+      if (!filterPanel || !filterToggle) return;
+      filterPanel.hidden = true;
+      filterToggle.setAttribute('aria-expanded', 'false');
+    };
+
+    search?.addEventListener('input', () => {
+      query = search.value;
+      page = 1;
+      render();
+    });
+
+    pageSizeSelect?.addEventListener('change', () => {
+      pageSize = Number(pageSizeSelect.value);
+      page = 1;
+      render();
+    });
+
+    root.addEventListener('combobox-change', (event) => {
+      const detail = (event as CustomEvent<{ name: string; value: string }>).detail;
+      if (!detail?.name) return;
+      selectValues.set(detail.name, detail.value);
+      page = 1;
+      render();
+    });
+
+    filterToggle?.addEventListener('click', () => {
+      if (!filterPanel || !filterToggle) return;
+      const open = filterPanel.hidden;
+      filterPanel.hidden = !open;
+      filterToggle.setAttribute('aria-expanded', String(open));
+    });
+
+    filterInputs.forEach((input) => {
+      input.addEventListener('change', () => {
+        if (input.checked) selectedFilters.add(input.value);
+        else selectedFilters.delete(input.value);
+        page = 1;
+        updateFilterCount();
+        render();
+      });
+    });
+
+    filterClear?.addEventListener('click', () => {
+      selectedFilters.clear();
+      filterInputs.forEach((input) => {
+        input.checked = false;
+      });
+      page = 1;
+      updateFilterCount();
+      render();
+    });
+
+    first?.addEventListener('click', () => {
+      page = 1;
+      render();
+    });
+    prev?.addEventListener('click', () => {
+      page = Math.max(1, page - 1);
+      render();
+    });
+    next?.addEventListener('click', () => {
+      page += 1;
+      render();
+    });
+    last?.addEventListener('click', () => {
+      const matched = rows.filter(matches).length;
+      page = Math.max(1, Math.ceil(matched / pageSize));
+      render();
+    });
+
+    document.addEventListener('click', (event) => {
+      const target = event.target as Node;
+      if (
+        filterPanel &&
+        !filterPanel.hidden &&
+        !filterPanel.contains(target) &&
+        !filterToggle?.contains(target)
+      ) {
+        closeFilters();
+      }
+    });
+
+    root.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeFilters();
+    });
+
+    updateFilterCount();
+    render();
+  });
+</script>
+
+<style>
+  .datatable {
+    display: flex;
+    flex-direction: column;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .datatable__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .datatable__identity {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .datatable__icon {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+  }
+
+  .datatable__heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .datatable__title {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.02em;
+  }
+
+  .datatable__description {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+  }
+
+  .datatable__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: none;
+  }
+
+  .datatable__toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-5);
+    border-bottom: var(--border-width) solid var(--color-border);
+    flex-wrap: wrap;
+  }
+
+  .datatable__search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: min(100%, 20rem);
+    height: var(--control-height-md);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-subtle);
+  }
+
+  .datatable__search:focus-within {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent);
+  }
+
+  .datatable__search svg {
+    position: absolute;
+    left: var(--space-3);
+    pointer-events: none;
+  }
+
+  .datatable__search input {
+    width: 100%;
+    height: 100%;
+    padding: 0 var(--space-3) 0 2.125rem;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .datatable__search input::placeholder {
+    color: var(--color-text-subtle);
+  }
+
+  .datatable__filter {
+    position: relative;
+  }
+
+  .datatable__filter-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .datatable__filter-button:hover {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  .datatable__filter-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-full);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-size: var(--text-xs);
+  }
+
+  .datatable__filter-panel {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    width: 13rem;
+    padding: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .datatable__filter-panel[hidden] {
+    display: none;
+  }
+
+  .datatable__filter-label {
+    padding: var(--space-1) var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+  }
+
+  .datatable__filter-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 1.75rem;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .datatable__filter-option:hover {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+  }
+
+  .datatable__filter-option input {
+    accent-color: var(--color-accent);
+  }
+
+  .datatable__filter-clear {
+    margin-top: var(--space-1);
+    padding: var(--space-2);
+    border: 0;
+    border-top: var(--border-width) solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-align: left;
+  }
+
+  .datatable__filter-clear:hover {
+    color: var(--color-text);
+  }
+
+  .datatable__table-wrap {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .datatable__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-md);
+  }
+
+  .datatable__table :global(thead th) {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0.04em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .datatable__table :global(tbody td) {
+    padding: var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border);
+    color: var(--color-text);
+    vertical-align: middle;
+  }
+
+  .datatable__table :global(tbody tr:last-child td) {
+    border-bottom: 0;
+  }
+
+  .datatable__table :global(tbody tr) {
+    transition: background-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .datatable__table :global(tbody tr:hover) {
+    background: var(--color-bg-subtle);
+  }
+
+  .datatable__table :global(thead th:first-child),
+  .datatable__table :global(tbody td:first-child) {
+    padding-left: var(--space-5);
+  }
+
+  .datatable__table :global(thead th:last-child),
+  .datatable__table :global(tbody td:last-child) {
+    padding-right: var(--space-5);
+  }
+
+  .datatable__empty {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-8) var(--space-5);
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  .datatable__empty p {
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .datatable__empty span {
+    font-size: var(--text-xs);
+  }
+
+  .datatable__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-5);
+    border-top: var(--border-width) solid var(--color-border);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .datatable__page-size {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    white-space: nowrap;
+  }
+
+  .datatable__page-size select {
+    height: 1.75rem;
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-xs);
+  }
+
+  .datatable__range {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .datatable__pager {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .datatable__page-label {
+    white-space: nowrap;
+  }
+
+  .datatable__pager-buttons {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .datatable__pager-buttons button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+  }
+
+  .datatable__pager-buttons button:hover:not(:disabled) {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  .datatable__pager-buttons button:disabled {
+    opacity: 0.35;
+  }
+
+  @media (max-width: 900px) {
+    .datatable__header,
+    .datatable__toolbar,
+    .datatable__footer {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .datatable__actions {
+      width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .datatable__search {
+      width: 100%;
+    }
+
+    .datatable__range {
+      margin-left: 0;
+    }
+
+    .datatable__pager {
+      width: 100%;
+      justify-content: space-between;
+    }
+  }
+</style>

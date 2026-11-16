@@ -1,0 +1,170 @@
+---
+import { ChevronDown, Download, Plus, Users } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import DataTable from '../../components/admin/DataTable.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+
+const members = [
+  { name: 'Sokha Meas', email: 'sokha@example.com', role: 'Creator', status: 'Active', templates: '8', uses: '412', joined: 'Mar 2026', initials: 'SM' },
+  { name: 'Dara Lim', email: 'dara@example.com', role: 'Creator', status: 'Active', templates: '5', uses: '208', joined: 'Apr 2026', initials: 'DL' },
+  { name: 'Vannak Heng', email: 'vannak@example.com', role: 'Trusted creator', status: 'Active', templates: '11', uses: '536', joined: 'Feb 2026', initials: 'VH' },
+  { name: 'Malis Chhay', email: 'malis@example.com', role: 'Creator', status: 'Invited', templates: '0', uses: '—', joined: 'Nov 2026', initials: 'MC' },
+  { name: 'Pisey Nou', email: 'pisey@example.com', role: 'Creator', status: 'Active', templates: '3', uses: '147', joined: 'Jun 2026', initials: 'PN' },
+  { name: 'Ratha Keo', email: 'ratha@example.com', role: 'Moderator', status: 'Suspended', templates: '0', uses: '—', joined: 'Jan 2026', initials: 'RK' },
+  { name: 'Bopha Sok', email: 'bopha@example.com', role: 'Creator', status: 'Active', templates: '2', uses: '96', joined: 'Jul 2026', initials: 'BS' },
+  { name: 'Chanthou Ith', email: 'chanthou@example.com', role: 'Creator', status: 'Active', templates: '4', uses: '188', joined: 'Aug 2026', initials: 'CI' },
+  { name: 'Sovann Reach', email: 'sovann@example.com', role: 'Moderator', status: 'Active', templates: '0', uses: '—', joined: 'Sep 2026', initials: 'SR' },
+  { name: 'Nary Phan', email: 'nary@example.com', role: 'Creator', status: 'Invited', templates: '0', uses: '—', joined: 'Nov 2026', initials: 'NP' },
+  { name: 'Kosal Tan', email: 'kosal@example.com', role: 'Creator', status: 'Active', templates: '1', uses: '42', joined: 'Oct 2026', initials: 'KT' },
+];
+
+const roleVariant = (role: string) =>
+  role === 'Moderator' || role === 'Trusted creator' ? 'info' : 'neutral';
+
+const statusVariant = (status: string) =>
+  status === 'Active' ? 'success' : status === 'Invited' ? 'warning' : 'danger';
+---
+
+<AdminLayout title="Users">
+  <DataTable
+    title="Members"
+    description="Manage members, creator trust levels, and moderator access."
+    searchPlaceholder="Search members by name or email…"
+    filters={[
+      { label: 'Active', value: 'active' },
+      { label: 'Invited', value: 'invited' },
+      { label: 'Suspended', value: 'suspended' },
+      { label: 'Moderator', value: 'moderator' },
+      { label: 'Trusted creator', value: 'trusted-creator' },
+    ]}
+  >
+    <Users slot="icon" size={18} stroke-width={1.75} />
+    <Fragment slot="actions">
+      <Button variant="secondary" size="sm">
+        <Download size={14} stroke-width={1.75} />
+        Export
+      </Button>
+      <Button variant="primary" size="sm">
+        <Plus size={14} stroke-width={2} />
+        Invite member
+      </Button>
+    </Fragment>
+
+    <thead>
+      <tr>
+        <th scope="col">Member</th>
+        <th scope="col">Email</th>
+        <th scope="col">Role</th>
+        <th scope="col">Status</th>
+        <th scope="col">Templates</th>
+        <th scope="col">Qualified uses</th>
+        <th scope="col">Joined</th>
+        <th scope="col"><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {members.map((member) => (
+        <tr
+          data-search={`${member.name} ${member.email} ${member.role} ${member.status}`}
+          data-filter={`${member.status.toLowerCase()} ${member.role.toLowerCase().replaceAll(' ', '-')}`}
+        >
+          <td>
+            <span class="cell-main">
+              <span class="member-avatar" aria-hidden="true">{member.initials}</span>
+              <span class="cell-copy">
+                <strong>{member.name}</strong>
+                <span>{member.role}</span>
+              </span>
+            </span>
+          </td>
+          <td class="muted">{member.email}</td>
+          <td><Badge variant={roleVariant(member.role)}>{member.role}</Badge></td>
+          <td><Badge variant={statusVariant(member.status)} dot>{member.status}</Badge></td>
+          <td class="numeric">{member.templates}</td>
+          <td class="numeric">{member.uses}</td>
+          <td class="muted">{member.joined}</td>
+          <td class="actions">
+            <a class="table-action" href={`/admin/users?member=${member.initials.toLowerCase()}`}>
+              Manage <ChevronDown size={12} stroke-width={1.75} />
+            </a>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </DataTable>
+
+  <p class="page-note">Role changes are recorded in the audit log. Moderators cannot approve payouts.</p>
+</AdminLayout>
+
+<style>
+  .cell-main {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 12rem;
+  }
+
+  .member-avatar {
+    display: inline-grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+  }
+
+  .cell-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .cell-copy strong {
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+  }
+
+  .cell-copy span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .muted {
+    color: var(--color-text-muted);
+  }
+
+  .actions {
+    text-align: right;
+  }
+
+  .table-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .table-action:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .page-note {
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+</style>

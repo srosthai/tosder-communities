@@ -1,0 +1,73 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+  class?: string;
+}
+
+const { title, description, class: className } = Astro.props;
+---
+
+<section class:list={['panel', className]}>
+  <header class="panel__header">
+    <div class="panel__heading">
+      <h2>{title}</h2>
+      {description && <p>{description}</p>}
+    </div>
+    <div class="panel__action">
+      <slot name="action" />
+    </div>
+  </header>
+  <div class="panel__body">
+    <slot />
+  </div>
+</section>
+
+<style>
+  .panel {
+    display: flex;
+    flex-direction: column;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    overflow: hidden;
+  }
+
+  .panel__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .panel__heading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  h2 {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  p {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .panel__action {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: none;
+  }
+
+  .panel__body {
+    padding: var(--space-4);
+    flex: 1;
+  }
+</style>

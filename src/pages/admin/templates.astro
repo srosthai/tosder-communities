@@ -1,0 +1,195 @@
+---
+import { ChevronDown, Download, LayoutTemplate, Plus } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import DataTable from '../../components/admin/DataTable.astro';
+import SearchableSelect from '../../components/admin/SearchableSelect.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+
+const templates = [
+  { name: 'Three days in Siem Reap', creator: 'Sokha Meas', province: 'Siem Reap', status: 'Published', uses: '184', views: '2,410', saves: '326', updated: '2 hours ago' },
+  { name: 'Phnom Penh in 48 hours', creator: 'Vannak Heng', province: 'Phnom Penh', status: 'Published', uses: '142', views: '1,708', saves: '214', updated: 'Yesterday' },
+  { name: 'Kampot slow weekend', creator: 'Dara Lim', province: 'Kampot', status: 'Pending review', uses: '—', views: '—', saves: '—', updated: '4 hours ago' },
+  { name: 'Koh Rong dive and rest', creator: 'Malis Chhay', province: 'Preah Sihanouk', status: 'Published', uses: '96', views: '1,284', saves: '168', updated: '2 days ago' },
+  { name: 'Battambang countryside loop', creator: 'Pisey Nou', province: 'Battambang', status: 'Draft', uses: '—', views: '—', saves: '—', updated: '3 days ago' },
+  { name: 'Mondulkiri waterfall trail', creator: 'Sokha Meas', province: 'Mondulkiri', status: 'Changes requested', uses: '—', views: '—', saves: '—', updated: '5 days ago' },
+  { name: 'Kep seafood and coast', creator: 'Sokha Meas', province: 'Kep', status: 'Published', uses: '88', views: '1,120', saves: '142', updated: '6 days ago' },
+  { name: 'Kratie river and dolphins', creator: 'Vannak Heng', province: 'Kratie', status: 'Published', uses: '73', views: '982', saves: '119', updated: '1 week ago' },
+  { name: 'Preah Vihear temple day', creator: 'Dara Lim', province: 'Preah Vihear', status: 'Pending review', uses: '—', views: '—', saves: '—', updated: '1 week ago' },
+  { name: 'Tonle Sap floating villages', creator: 'Malis Chhay', province: 'Siem Reap', status: 'Published', uses: '61', views: '840', saves: '97', updated: '2 weeks ago' },
+  { name: 'Ratanakiri crater lake', creator: 'Pisey Nou', province: 'Ratanakiri', status: 'Draft', uses: '—', views: '—', saves: '—', updated: '2 weeks ago' },
+];
+
+const statusVariant = (status: string) =>
+  status === 'Published'
+    ? 'success'
+    : status === 'Pending review'
+      ? 'warning'
+      : status === 'Changes requested'
+        ? 'danger'
+        : 'neutral';
+---
+
+<AdminLayout title="Templates">
+  <DataTable
+    title="Templates"
+    description="Review creator submissions, monitor quality, and keep the public library useful."
+    searchPlaceholder="Search templates by name, creator, or province…"
+    filters={[
+      { label: 'Published', value: 'published' },
+      { label: 'Pending review', value: 'pending-review' },
+      { label: 'Draft', value: 'draft' },
+      { label: 'Changes requested', value: 'changes-requested' },
+    ]}
+  >
+    <LayoutTemplate slot="icon" size={18} stroke-width={1.75} />
+    <Fragment slot="actions">
+      <Button variant="secondary" size="sm">
+        <Download size={14} stroke-width={1.75} />
+        Export
+      </Button>
+      <Button variant="primary" size="sm">
+        <Plus size={14} stroke-width={2} />
+        Create template
+      </Button>
+    </Fragment>
+
+    <SearchableSelect
+      slot="toolbar"
+      name="province"
+      label="Province"
+      searchPlaceholder="Search provinces…"
+      options={[
+        { value: '', label: 'All provinces' },
+        { value: 'siem-reap', label: 'Siem Reap' },
+        { value: 'phnom-penh', label: 'Phnom Penh' },
+        { value: 'kampot', label: 'Kampot' },
+        { value: 'preah-sihanouk', label: 'Preah Sihanouk' },
+        { value: 'battambang', label: 'Battambang' },
+        { value: 'mondulkiri', label: 'Mondulkiri' },
+        { value: 'kep', label: 'Kep' },
+        { value: 'kratie', label: 'Kratie' },
+        { value: 'preah-vihear', label: 'Preah Vihear' },
+        { value: 'ratanakiri', label: 'Ratanakiri' },
+      ]}
+    />
+
+    <thead>
+      <tr>
+        <th scope="col">Template</th>
+        <th scope="col">Creator</th>
+        <th scope="col">Province</th>
+        <th scope="col">Status</th>
+        <th scope="col">Uses</th>
+        <th scope="col">Views</th>
+        <th scope="col">Saves</th>
+        <th scope="col">Updated</th>
+        <th scope="col"><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {templates.map((template) => (
+        <tr
+          data-search={`${template.name} ${template.creator} ${template.province} ${template.status}`}
+          data-filter={template.status.toLowerCase().replaceAll(' ', '-')}
+          data-province={template.province.toLowerCase().replaceAll(' ', '-')}
+        >
+          <td>
+            <span class="cell-main">
+              <span class="cell-icon" aria-hidden="true"><LayoutTemplate size={14} stroke-width={1.75} /></span>
+              <span class="cell-copy">
+                <strong>{template.name}</strong>
+                <span>{template.province}</span>
+              </span>
+            </span>
+          </td>
+          <td>{template.creator}</td>
+          <td>{template.province}</td>
+          <td><Badge variant={statusVariant(template.status)} dot>{template.status}</Badge></td>
+          <td class="numeric">{template.uses}</td>
+          <td class="numeric">{template.views}</td>
+          <td class="numeric">{template.saves}</td>
+          <td class="muted">{template.updated}</td>
+          <td class="actions">
+            <a class="table-action" href={`/admin/templates?review=${template.name.toLowerCase().replaceAll(' ', '-')}`}>
+              Review <ChevronDown size={12} stroke-width={1.75} />
+            </a>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </DataTable>
+
+  <p class="page-note">Qualified uses are counted once per traveler, template, and competition month.</p>
+</AdminLayout>
+
+<style>
+  .cell-main {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 15rem;
+  }
+
+  .cell-icon {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+  }
+
+  .cell-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .cell-copy strong {
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+  }
+
+  .cell-copy span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .muted {
+    color: var(--color-text-muted);
+  }
+
+  .actions {
+    text-align: right;
+  }
+
+  .table-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .table-action:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .page-note {
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+</style>

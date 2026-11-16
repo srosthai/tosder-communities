@@ -398,8 +398,10 @@ const templates = [
     const buttons = document.querySelectorAll<HTMLElement>('[data-theme-toggle]');
 
     const setTheme = (theme: string) => {
-      document.documentElement.dataset.theme = theme;
-      document.documentElement.classList.toggle('dark', theme === 'admin');
+      const dark = theme === 'admin';
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document.documentElement.dataset.surface = dark ? 'admin' : 'public';
+      document.documentElement.classList.toggle('dark', dark);
       localStorage.setItem('tosder-preview-theme', theme);
       for (const button of buttons) {
         button.setAttribute(
