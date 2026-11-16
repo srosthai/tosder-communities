@@ -3,6 +3,7 @@ import { ArrowLeft } from '@lucide/astro';
 import PublicLayout from '../../layouts/PublicLayout.astro';
 import PublicButton from '../../components/public/PublicButton.astro';
 import DestinationCard from '../../components/public/DestinationCard.astro';
+import MapView from '../../components/public/MapView.astro';
 import EmptyState from '../../components/ui/EmptyState.astro';
 import { getDestinationBySlug, listRelatedDestinations } from '../../lib/destinations';
 
@@ -107,6 +108,17 @@ const coords =
                 More in {destination.province}
               </a>
             </div>
+
+            {destination.latitude != null && destination.longitude != null && (
+              <div class="sidebar-map">
+                <MapView
+                  destinations={[destination]}
+                  height="14rem"
+                  zoom={13}
+                  label="Destination on this map"
+                />
+              </div>
+            )}
           </aside>
         </div>
 
@@ -316,6 +328,10 @@ const coords =
   .mono {
     font-family: var(--font-mono);
     font-size: var(--text-xs);
+  }
+
+  .sidebar-map {
+    margin-top: var(--space-3);
   }
 
   .sidebar-link {

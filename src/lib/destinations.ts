@@ -24,13 +24,13 @@ export interface DestinationListParams {
 
 export interface DestinationSummary extends DestinationCardData {
   id: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface DestinationDetail extends DestinationSummary {
   description: string | null;
   practicalTips: string | null;
-  latitude: number | null;
-  longitude: number | null;
   photos: Array<{ url: string; alt: string; credit: string | null }>;
   categories: string[];
   tags: string[];
@@ -100,6 +100,8 @@ export async function listDestinations(params: DestinationListParams = {}) {
     category: destination.categories[0]?.category.name ?? null,
     image: destination.coverPhotoUrl ?? destination.photos[0]?.url ?? imageFallback,
     alt: destination.photos[0]?.alt ?? destination.name,
+    latitude: destination.latitude,
+    longitude: destination.longitude,
   }));
 
   return { destinations, total, page, pageSize, totalPages };
@@ -178,6 +180,8 @@ export async function listRelatedDestinations(
     category: destination.categories[0]?.category.name ?? null,
     image: destination.coverPhotoUrl ?? destination.photos[0]?.url ?? imageFallback,
     alt: destination.photos[0]?.alt ?? destination.name,
+    latitude: destination.latitude,
+    longitude: destination.longitude,
   }));
 }
 

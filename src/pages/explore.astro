@@ -2,6 +2,7 @@
 import { Search } from '@lucide/astro';
 import PublicPage from '../components/public/PublicPage.astro';
 import DestinationCard from '../components/public/DestinationCard.astro';
+import MapView from '../components/public/MapView.astro';
 import PublicButton from '../components/public/PublicButton.astro';
 import EmptyState from '../components/ui/EmptyState.astro';
 import Pagination from '../components/ui/Pagination.astro';
@@ -106,6 +107,12 @@ const activeFilters = Boolean(q || province || category || sort !== 'recommended
     </p>
     <span>Page {currentPage} of {totalPages}</span>
   </div>
+
+  {destinations.length > 0 && (
+    <div class="explore-map">
+      <MapView destinations={destinations} height="16rem" label="Destinations on this page" />
+    </div>
+  )}
 
   {dataError ? (
     <EmptyState
@@ -250,6 +257,10 @@ const activeFilters = Boolean(q || province || category || sort !== 'recommended
     color: var(--color-text-subtle);
     font-size: var(--text-xs);
     white-space: nowrap;
+  }
+
+  .explore-map {
+    margin-bottom: var(--space-4);
   }
 
   .explore-grid {
