@@ -1,0 +1,307 @@
+---
+import { MapPin } from '@lucide/astro';
+
+interface MapPoint {
+  name: string;
+  slug: string;
+  province: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+interface Props {
+  destinations: MapPoint[];
+  height?: string;
+  zoom?: number;
+  label?: string;
+}
+
+const {
+  destinations,
+  height = '22rem',
+  zoom = 12,
+  label = 'Destinations on this map',
+} = Astro.props;
+
+const points = destinations.filter(
+  (destination) => destination.latitude != null && destination.longitude != null,
+);
+const payload = JSON.stringify(
+  points.map((destination) => ({
+    name: destination.name,
+    slug: destination.slug,
+    province: destination.province,
+    latitude: destination.latitude,
+    longitude: destination.longitude,
+  })),
+);
+---
+
+{points.length > 0 && (
+  <section
+    class="map"
+    data-map-view
+    data-points={payload}
+    data-zoom={zoom}
+    style={`--map-height: ${height};`}
+  >
+    <div class="map__facade" data-map-facade>
+      <div class="map__grid" aria-hidden="true"></div>
+      <div class="map__content">
+        <p class="map__label">
+          <MapPin size={15} stroke-width={1.75} aria-hidden="true" />
+          {points.length === 1 ? '1 place on the map' : `${points.length} places on the map`}
+        </p>
+        <button type="button" class="map__button" data-map-load>Open map</button>
+        <p class="map__hint">Loads OpenStreetMap tiles and the map controls.</p>
+      </div>
+    </div>
+
+    <div
+      class="map__canvas"
+      data-map-canvas
+      style={`--map-height: ${height};`}
+      role="region"
+      aria-label="Map of destinations"
+      hidden
+    ></div>
+
+    <details class="map__list">
+      <summary>{label}</summary>
+      <ul>
+        {points.map((point) => (
+          <li>
+            <a href={`/destinations/${point.slug}`}>{point.name}</a>
+            <span>{point.province}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  </section>
+)}
+
+<script>
+  import 'leaflet/dist/leaflet.css';
+  import 'leaflet.markercluster/dist/MarkerCluster.css';
+  import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+
+  const escapeHtml = (value: string) =>
+    value.replace(/[&<>"']/g, (character) => {
+      const entities: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      };
+      return entities[character] ?? character;
+    });
+
+  document.querySelectorAll<HTMLElement>('[data-map-view]').forEach((root) => {
+    const facade = root.querySelector<HTMLElement>('[data-map-facade]');
+    const canvas = root.querySelector<HTMLElement>('[data-map-canvas]');
+    const button = root.querySelector<HTMLButtonElement>('[data-map-load]');
+    if (!facade || !canvas || !button) return;
+
+    let loaded = false;
+
+    const load = async () => {
+      if (loaded) return;
+      loaded = true;
+      button.disabled = true;
+      button.textContent = 'Loading…';
+
+      try {
+        const L = (await import('leaflet')).default;
+        await import('leaflet.markercluster');
+
+        facade.hidden = true;
+        canvas.hidden = false;
+
+        const raw = root.dataset.points ?? '[]';
+        const points = JSON.parse(raw) as Array<{
+          name: string;
+          slug: string;
+          province: string;
+          latitude: number;
+          longitude: number;
+        }>;
+
+        const map = L.map(canvas, {
+          scrollWheelZoom: false,
+          zoomControl: true,
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors',
+        }).addTo(map);
+
+        const cluster = L.markerClusterGroup({
+          showCoverageOnHover: false,
+          maxClusterRadius: 48,
+        });
+
+        points.forEach((point) => {
+          const marker = L.circleMarker([point.latitude, point.longitude], {
+            radius: 6,
+            color: '#0f766e',
+            weight: 2,
+            fillColor: '#5eead4',
+            fillOpacity: 0.9,
+          }).bindPopup(
+            `<a href="/destinations/${point.slug}">${escapeHtml(point.name)}</a><br />${escapeHtml(point.province)}`,
+          );
+          cluster.addLayer(marker);
+        });
+
+        map.addLayer(cluster);
+
+        if (points.length === 1) {
+          map.setView([points[0].latitude, points[0].longitude], Number(root.dataset.zoom ?? 12));
+        } else {
+          map.fitBounds(cluster.getBounds(), { padding: [24, 24] });
+        }
+
+        window.setTimeout(() => map.invalidateSize(), 0);
+      } catch {
+        facade.hidden = false;
+        canvas.hidden = true;
+        button.disabled = false;
+        button.textContent = 'Retry map';
+        loaded = false;
+      }
+    };
+
+    button.addEventListener('click', load);
+  });
+</script>
+
+<style>
+  .map {
+    display: flex;
+    flex-direction: column;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    overflow: hidden;
+  }
+
+  .map__facade {
+    position: relative;
+    display: flex;
+    min-height: var(--map-height, 22rem);
+    align-items: center;
+    justify-content: center;
+    background:
+      linear-gradient(135deg, var(--color-bg-subtle), var(--color-surface-sunken));
+    overflow: hidden;
+  }
+
+  .map__grid {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, var(--color-border) 1px, transparent 1px);
+    background-size: 18px 18px;
+    opacity: 0.8;
+  }
+
+  .map__content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-5);
+    text-align: center;
+  }
+
+  .map__label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .map__button {
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .map__button:hover:not(:disabled) {
+    border-color: var(--color-border-strong);
+    background: var(--color-bg-subtle);
+  }
+
+  .map__button:disabled {
+    opacity: 0.6;
+  }
+
+  .map__hint {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .map__canvas {
+    height: var(--map-height);
+    width: 100%;
+    background: var(--color-surface-sunken);
+  }
+
+  .map__canvas[hidden] {
+    display: none;
+  }
+
+  .map__list {
+    padding: var(--space-2) var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+    background: var(--color-surface);
+    font-size: var(--text-xs);
+  }
+
+  .map__list summary {
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .map__list summary:hover {
+    color: var(--color-text);
+  }
+
+  .map__list ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .map__list li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-1) 0;
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .map__list a {
+    color: var(--color-text);
+  }
+
+  .map__list a:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .map__list li span {
+    color: var(--color-text-subtle);
+  }
+</style>

@@ -23,7 +23,7 @@ test.describe('explore', () => {
 
     await expect(page).toHaveURL(/q=Angkor/);
     await expect(page.locator('.destination-card')).toHaveCount(2);
-    await expect(page.getByText('2 places')).toBeVisible();
+    await expect(page.locator('.results-header')).toContainText('2 places');
     await expect(page.locator('.destination-card', { hasText: 'Angkor Wat' })).toBeVisible();
     await expect(page.locator('.destination-card', { hasText: 'Ta Prohm' })).toBeVisible();
   });
