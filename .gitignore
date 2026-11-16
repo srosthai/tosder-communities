@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+.output/
+.astro/
+.nitro/
+.vercel/
+.netlify/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+
+# Test and coverage
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+
+# Cache
+.cache/
+.turbo/
+.eslintcache
+tsconfig.tsbuildinfo
