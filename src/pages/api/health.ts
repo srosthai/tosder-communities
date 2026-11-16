@@ -1,17 +1,8 @@
 import type { APIRoute } from 'astro';
+import { apiRoute, json } from '../../lib/api';
 import { checkDatabase, getPrisma } from '../../db/prisma';
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
-  });
-}
-
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = apiRoute(async (_context, requestId) => {
   const startedAt = performance.now();
   const databaseCheck = await checkDatabase();
 
@@ -38,7 +29,8 @@ export const GET: APIRoute = async () => {
       },
       latencyMs: Math.round(performance.now() - startedAt),
       timestamp: new Date().toISOString(),
+      requestId,
     },
     healthy ? 200 : 503,
   );
-};
+});

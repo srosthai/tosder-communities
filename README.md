@@ -61,6 +61,7 @@ The `todos` table is a smoke test, not part of the final domain model.
 - [Product flow](./cambodia_travel_platform_flow.pdf)
 - [Product decisions](./docs/decisions.md)
 - [Authentication](./docs/auth.md)
+- [API conventions](./docs/api.md)
 - [Data model](./docs/data-model.md)
 - [Maps](./docs/maps.md)
 - [SEO and sharing](./docs/seo.md)
