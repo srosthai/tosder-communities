@@ -50,3 +50,6 @@ yarn-error.log*
 .turbo/
 .eslintcache
 tsconfig.tsbuildinfo
+
+# Lighthouse CI
+.lighthouseci/
