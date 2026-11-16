@@ -1,7 +1,19 @@
 ---
-import { ArrowRight, Check, MapPin, Route, Sparkles } from '@lucide/astro';
+import {
+  ArrowRight,
+  Check,
+  LayoutTemplate,
+  MapPin,
+  Route,
+  Search,
+  Sparkles,
+  Users,
+} from '@lucide/astro';
 import PublicLayout from '../layouts/PublicLayout.astro';
 import Badge from '../components/ui/Badge.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+import { getPrisma } from '../db/prisma';
 
 const stops = [
   { day: 'Day 1', place: 'Angkor Wat', detail: 'Sunrise, then the quiet outer temples' },
@@ -9,6 +21,83 @@ const stops = [
   { day: 'Day 3', place: 'Kep crab market', detail: 'Seafood lunch and the coastal road' },
   { day: 'Day 4', place: 'Koh Rong', detail: 'Boat out, swim, and do very little' },
 ];
+
+interface DestinationCard {
+  name: string;
+  slug: string;
+  summary: string | null;
+  province: string;
+  category: string | null;
+  image: string;
+  alt: string;
+}
+
+interface CollectionCard {
+  title: string;
+  slug: string;
+  description: string | null;
+  destinations: string[];
+}
+
+let destinations: DestinationCard[] = [];
+let collections: CollectionCard[] = [];
+
+try {
+  const prisma = getPrisma();
+  const [destinationRows, collectionRows] = await Promise.all([
+    prisma.destination.findMany({
+      where: { status: 'PUBLISHED' },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      take: 6,
+      include: {
+        province: { select: { name: true } },
+        photos: {
+          orderBy: { sortOrder: 'asc' },
+          take: 1,
+          select: { url: true, alt: true },
+        },
+        categories: {
+          take: 1,
+          include: { category: { select: { name: true } } },
+        },
+      },
+    }),
+    prisma.featuredCollection.findMany({
+      where: { status: 'PUBLISHED' },
+      orderBy: { sortOrder: 'asc' },
+      take: 2,
+      include: {
+        items: {
+          orderBy: { sortOrder: 'asc' },
+          include: { destination: { select: { name: true } } },
+        },
+      },
+    }),
+  ]);
+
+  destinations = destinationRows.map((destination) => ({
+    name: destination.name,
+    slug: destination.slug,
+    summary: destination.summary,
+    province: destination.province.name,
+    category: destination.categories[0]?.category.name ?? null,
+    image:
+      destination.coverPhotoUrl ??
+      destination.photos[0]?.url ??
+      '/image/placeholder-destination.svg',
+    alt: destination.photos[0]?.alt ?? destination.name,
+  }));
+
+  collections = collectionRows.map((collection) => ({
+    title: collection.title,
+    slug: collection.slug,
+    description: collection.description,
+    destinations: collection.items.map((item) => item.destination.name),
+  }));
+} catch {
+  destinations = [];
+  collections = [];
+}
 ---
 
 <PublicLayout title="Tosder Communities — Cambodia travel, planned well">
@@ -28,6 +117,19 @@ const stops = [
           </a>
           <a class="button button--secondary" href="/templates">Browse templates</a>
         </div>
+
+        <form class="hero-search" action="/explore" method="get" role="search">
+          <Search size={15} stroke-width={1.75} aria-hidden="true" />
+          <input
+            type="search"
+            name="q"
+            placeholder="Search a province, place, or route…"
+            aria-label="Search destinations"
+            autocomplete="off"
+          />
+          <button type="submit">Search</button>
+        </form>
+
         <p class="fine-print">Free to browse. Templates are created and shared by travelers.</p>
       </div>
 
@@ -64,6 +166,89 @@ const stops = [
           <a href="/templates">View template <ArrowRight size={13} stroke-width={1.75} /></a>
         </div>
       </aside>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="places-heading">
+    <div class="container">
+      <div class="section__intro section__intro--row">
+        <div>
+          <p class="label">Places to start with</p>
+          <h2 id="places-heading">A few good places to begin.</h2>
+        </div>
+        <a class="section-link" href="/explore">
+          Explore all destinations
+          <ArrowRight size={14} stroke-width={1.75} />
+        </a>
+      </div>
+
+      {destinations.length > 0 ? (
+        <div class="destination-grid">
+          {destinations.map((destination) => (
+            <a class="destination-card" href={`/explore?destination=${destination.slug}`}>
+              <span class="destination-card__media">
+                <img
+                  src={destination.image}
+                  alt={destination.alt}
+                  width="800"
+                  height="600"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </span>
+              <span class="destination-card__body">
+                <span class="destination-card__meta">
+                  <span>{destination.province}</span>
+                  {destination.category && <span>{destination.category}</span>}
+                </span>
+                <strong>{destination.name}</strong>
+                {destination.summary && <span class="destination-card__summary">{destination.summary}</span>}
+              </span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="The destination catalog is being prepared"
+          description="Reviewed places, coordinates, and practical notes will appear here as the content milestone lands."
+        >
+          <MapPin slot="icon" size={20} stroke-width={1.75} />
+          <PublicButton href="/status">Check system status</PublicButton>
+        </EmptyState>
+      )}
+    </div>
+  </section>
+
+  <section class="section section--routes" aria-labelledby="routes-heading">
+    <div class="container routes-grid">
+      <div class="routes-copy">
+        <p class="label">Editorial routes</p>
+        <h2 id="routes-heading">Start with a shape, then make it yours.</h2>
+        <p>
+          Collections group a few places that work well together. Copy a route,
+          change the dates, and keep the parts that fit your trip.
+        </p>
+      </div>
+
+      <div class="collection-list">
+        {collections.length > 0 ? (
+          collections.map((collection) => (
+            <a class="collection-card" href={`/explore?collection=${collection.slug}`}>
+              <div class="collection-card__header">
+                <h3>{collection.title}</h3>
+                <ArrowRight size={15} stroke-width={1.75} aria-hidden="true" />
+              </div>
+              {collection.description && <p>{collection.description}</p>}
+              <span>{collection.destinations.join(' · ')}</span>
+            </a>
+          ))
+        ) : (
+          <EmptyState
+            title="Collections are on the way"
+            description="Editorial routes will appear here after the destination catalog is reviewed."
+          />
+        )}
+      </div>
     </div>
   </section>
 
@@ -113,6 +298,31 @@ const stops = [
         <li><Check size={16} stroke-width={2} aria-hidden="true" /> Creators see aggregate performance, never private trip details</li>
         <li><Check size={16} stroke-width={2} aria-hidden="true" /> Monthly Top 5 rewards follow published, audited rules</li>
       </ul>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="next-heading">
+    <div class="container">
+      <div class="section__intro">
+        <p class="label">Coming next</p>
+        <h2 id="next-heading">The first templates and creator profiles are being prepared.</h2>
+      </div>
+      <div class="two-up">
+        <EmptyState
+          title="The first reviewed templates are on the way"
+          description="Creators can draft itineraries in the admin preview. Public publishing opens after the creator workflow and moderation pass."
+        >
+          <LayoutTemplate slot="icon" size={20} stroke-width={1.75} />
+          <PublicButton href="/templates" variant="secondary">See the template page</PublicButton>
+        </EmptyState>
+        <EmptyState
+          title="Creator profiles appear with the first published templates"
+          description="Every public plan credits its creator. One account is both traveler and creator."
+        >
+          <Users slot="icon" size={20} stroke-width={1.75} />
+          <PublicButton href="/sign-up">Become a creator</PublicButton>
+        </EmptyState>
+      </div>
     </div>
   </section>
 
@@ -215,6 +425,210 @@ const stops = [
     margin-top: var(--space-3);
     color: var(--color-text-subtle);
     font-size: var(--text-xs);
+  }
+
+  .hero-search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: min(100%, 28rem);
+    height: var(--control-height-lg);
+    margin-top: var(--space-5);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-subtle);
+  }
+
+  .hero-search:focus-within {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent);
+  }
+
+  .hero-search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .hero-search input::placeholder {
+    color: var(--color-text-subtle);
+  }
+
+  .hero-search button {
+    height: 1.75rem;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+  }
+
+  .section__intro--row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-6);
+    max-width: none;
+  }
+
+  .section-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex: none;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .section-link:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .destination-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .destination-card {
+    display: flex;
+    flex-direction: column;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    overflow: hidden;
+    transition:
+      border-color var(--duration-fast) var(--ease-standard),
+      transform var(--duration-fast) var(--ease-standard);
+  }
+
+  .destination-card:hover {
+    border-color: var(--color-border-strong);
+    transform: translateY(-2px);
+  }
+
+  .destination-card__media {
+    display: block;
+    aspect-ratio: 4 / 3;
+    background: var(--color-surface-sunken);
+    overflow: hidden;
+  }
+
+  .destination-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .destination-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+  }
+
+  .destination-card__meta {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .destination-card__body strong {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.015em;
+  }
+
+  .destination-card__summary {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .section--routes {
+    background: var(--color-bg-subtle);
+  }
+
+  .routes-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(20rem, 1.1fr);
+    gap: clamp(var(--space-8), 6vw, 5rem);
+    align-items: start;
+  }
+
+  .routes-copy p:not(.label) {
+    max-width: 50ch;
+    margin-top: var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .collection-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .collection-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .collection-card:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  .collection-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .collection-card__header h3 {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .collection-card__header svg {
+    color: var(--color-text-subtle);
+  }
+
+  .collection-card p {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .collection-card > span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+  }
+
+  .two-up {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
   }
 
   .route-card {
@@ -504,7 +918,9 @@ const stops = [
 
   @media (max-width: 960px) {
     .hero__grid,
-    .trust-grid {
+    .trust-grid,
+    .routes-grid,
+    .two-up {
       grid-template-columns: minmax(0, 1fr);
     }
 
@@ -517,6 +933,15 @@ const stops = [
       gap: var(--space-5);
     }
 
+    .destination-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .section__intro--row {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
     .cta-band {
       align-items: flex-start;
       flex-direction: column;
@@ -524,8 +949,13 @@ const stops = [
   }
 
   @media (max-width: 520px) {
-    .button {
+    .button,
+    .hero-search {
       width: 100%;
+    }
+
+    .destination-grid {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .route-card__footer {

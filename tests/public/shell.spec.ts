@@ -20,6 +20,15 @@ test.describe('public shell', () => {
     await expect(header.getByRole('link', { name: 'Get started' })).toBeVisible();
   });
 
+  test('renders seeded destinations and featured collections', async ({ page }) => {
+    await page.goto('/');
+
+    await expect(page.locator('.destination-card', { hasText: 'Angkor Wat' })).toBeVisible();
+    await expect(page.locator('.destination-card', { hasText: 'Kampot riverside' })).toBeVisible();
+    await expect(page.getByText('Temples and quiet roads')).toBeVisible();
+    await expect(page.getByText('Coast and islands')).toBeVisible();
+  });
+
   test('puts the skip link first in the tab order', async ({ page }) => {
     await page.goto('/');
     await page.keyboard.press('Tab');
