@@ -3,7 +3,8 @@ import { expect, test } from '@playwright/test';
 
 test.describe('public shell', () => {
   test('renders the header, navigation, and hero', async ({ page }) => {
-    await page.goto('/');
+    const response = await page.goto('/');
+    expect(response?.headers()['x-request-id']).toMatch(/^req_/);
 
     await expect(
       page.getByRole('heading', {
