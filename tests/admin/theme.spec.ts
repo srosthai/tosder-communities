@@ -8,6 +8,7 @@ test.describe('admin theme', () => {
     const toggle = page.getByRole('button', { name: 'Switch to light theme' });
 
     await expect(root).toHaveClass(/dark/);
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await toggle.click();
 
     await expect(root).not.toHaveClass(/dark/);

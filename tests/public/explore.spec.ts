@@ -30,6 +30,7 @@ test.describe('explore', () => {
 
   test('filters by province and category', async ({ page }) => {
     await page.goto('/explore');
+    await expect(page.locator('[data-explore-filters]')).toHaveAttribute('data-ready', 'true');
     await page.getByLabel('Filter by province').selectOption('kampot');
     await expect(page).toHaveURL(/province=kampot/);
     await expect(page.locator('.destination-card', { hasText: 'Bokor Mountain' })).toBeVisible();
@@ -38,6 +39,7 @@ test.describe('explore', () => {
     await page.getByRole('link', { name: 'Clear' }).click();
     await expect(page).toHaveURL(/\/explore$/);
     await expect(page.locator('.destination-card')).toHaveCount(6);
+    await expect(page.locator('[data-explore-filters]')).toHaveAttribute('data-ready', 'true');
 
     await page.getByLabel('Filter by category').selectOption('food');
     await expect(page).toHaveURL(/category=food/);

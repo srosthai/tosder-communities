@@ -146,9 +146,12 @@ const activeFilters = Boolean(q || province || category || sort !== 'recommended
 
 <script>
   const form = document.querySelector<HTMLFormElement>('[data-explore-filters]');
-  form?.querySelectorAll('select').forEach((select) => {
-    select.addEventListener('change', () => form.requestSubmit());
-  });
+  if (form) {
+    form.querySelectorAll('select').forEach((select) => {
+      select.addEventListener('change', () => form.requestSubmit());
+    });
+    form.dataset.ready = 'true';
+  }
 </script>
 
 <style>
