@@ -65,6 +65,7 @@ The `todos` table is a smoke test, not part of the final domain model.
 - [Data model](./docs/data-model.md)
 - [Maps](./docs/maps.md)
 - [SEO and sharing](./docs/seo.md)
+- [Observability](./docs/observability.md)
 - [Quality budgets](./docs/quality-budgets.md)
 - [Issues](https://github.com/srosthai/tosder-communities/issues)
 - [Milestones](https://github.com/srosthai/tosder-communities/milestones)

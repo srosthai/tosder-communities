@@ -28,6 +28,7 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
         todosTable,
       },
       latencyMs: Math.round(performance.now() - startedAt),
+      release: process.env.RELEASE ?? process.env.NODE_ENV ?? 'development',
       timestamp: new Date().toISOString(),
       requestId,
     },
