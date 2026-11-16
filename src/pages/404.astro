@@ -1,0 +1,23 @@
+---
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+---
+
+<PublicPage
+  label="Error 404"
+  title="Page not found."
+  description="The page you are looking for does not exist or has moved. Try Explore, or start from the home page."
+>
+  <div class="error-actions">
+    <PublicButton href="/">Back to home</PublicButton>
+    <PublicButton href="/explore" variant="secondary">Explore destinations</PublicButton>
+  </div>
+</PublicPage>
+
+<style>
+  .error-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+</style>

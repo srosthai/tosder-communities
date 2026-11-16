@@ -1,0 +1,20 @@
+---
+import { UserRound } from '@lucide/astro';
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+---
+
+<PublicPage
+  label="Account"
+  title="Sign in"
+  description="Member accounts, saved places, and private trip copies are part of the member workspace build."
+>
+  <EmptyState
+    title="Accounts are not open yet"
+    description="Authentication is the next foundation task. The public site stays readable without an account."
+  >
+    <UserRound slot="icon" size={20} stroke-width={1.75} />
+    <PublicButton href="/">Back to home</PublicButton>
+  </EmptyState>
+</PublicPage>

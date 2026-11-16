@@ -1,0 +1,23 @@
+---
+import { Trophy } from '@lucide/astro';
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+import Badge from '../components/ui/Badge.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+---
+
+<PublicPage
+  label="Leaderboard"
+  title="The monthly Top 5."
+  description="Creators rank by qualified uses, not views or saves. The first competition starts after the platform opens."
+>
+  <Badge slot="actions" variant="info">Starts after launch</Badge>
+
+  <EmptyState
+    title="No competition is active yet"
+    description="Published rules, funded prizes, and a frozen ranking snapshot will appear here when the first period opens."
+  >
+    <Trophy slot="icon" size={20} stroke-width={1.75} />
+    <PublicButton href="/">Back to home</PublicButton>
+  </EmptyState>
+</PublicPage>

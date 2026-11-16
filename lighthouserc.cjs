@@ -5,6 +5,7 @@ module.exports = {
       startServerReadyPattern: 'Server listening',
       startServerReadyTimeout: 30_000,
       url: [
+        'http://127.0.0.1:4322/',
         'http://127.0.0.1:4322/design?theme=light',
         'http://127.0.0.1:4322/admin',
       ],
