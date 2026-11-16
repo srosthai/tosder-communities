@@ -19,7 +19,9 @@
     "test": "playwright test",
     "test:admin": "playwright test tests/admin",
     "test:a11y": "playwright test --grep accessibility",
-    "lighthouse": "lhci autorun"
+    "lighthouse": "lhci autorun",
+    "db:seed": "node prisma/seed.mjs",
+    "db:check": "node scripts/check-geography.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.13",

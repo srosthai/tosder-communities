@@ -6,12 +6,188 @@ datasource db {
   provider = "postgresql"
 }
 
-// Temporary connectivity model. Replace with the domain models from the
-// backend milestones (geography, templates, trips, usage, competitions).
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// Temporary connectivity model. Remove once the status smoke test is replaced
+// by a real health check.
 model Todo {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("todos")
+}
+
+model Province {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  slug         String        @unique
+  summary      String?
+  description  String?
+  heroImageUrl String?       @map("hero_image_url")
+  status       ContentStatus @default(DRAFT)
+  sortOrder    Int           @default(0) @map("sort_order")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  districts      District[]
+  destinations   Destination[]
+
+  @@index([status])
+  @@index([name])
+  @@map("provinces")
+}
+
+model District {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provinceId String        @map("province_id") @db.Uuid
+  name       String
+  slug       String        @unique
+  status     ContentStatus @default(DRAFT)
+  sortOrder  Int           @default(0) @map("sort_order")
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  province     Province      @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  destinations Destination[]
+
+  @@index([provinceId])
+  @@index([status])
+  @@map("districts")
+}
+
+model Category {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  destinations DestinationCategory[]
+
+  @@map("categories")
+}
+
+model Tag {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  destinations DestinationTag[]
+
+  @@map("tags")
+}
+
+model Destination {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provinceId     String        @map("province_id") @db.Uuid
+  districtId     String?       @map("district_id") @db.Uuid
+  name           String
+  slug           String        @unique
+  summary        String?
+  description    String?
+  practicalTips  String?       @map("practical_tips")
+  latitude       Float?
+  longitude      Float?
+  // PostGIS column managed by the geography migration and sync trigger.
+  location       Unsupported("geography(Point, 4326)")?
+  status         ContentStatus @default(DRAFT)
+  coverPhotoUrl  String?       @map("cover_photo_url")
+  sortOrder      Int           @default(0) @map("sort_order")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  province    Province      @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  district    District?     @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  photos      DestinationPhoto[]
+  categories  DestinationCategory[]
+  tags        DestinationTag[]
+  collections FeaturedCollectionItem[]
+
+  @@index([provinceId])
+  @@index([districtId])
+  @@index([status])
+  @@index([provinceId, status])
+  @@index([name])
+  @@index([location], type: Gist)
+  @@map("destinations")
+}
+
+model DestinationPhoto {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  destinationId String   @map("destination_id") @db.Uuid
+  url           String
+  alt           String
+  credit        String?
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@unique([destinationId, sortOrder])
+  @@index([destinationId])
+  @@map("destination_photos")
+}
+
+model DestinationCategory {
+  destinationId String @map("destination_id") @db.Uuid
+  categoryId    String @map("category_id") @db.Uuid
+
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([destinationId, categoryId])
+  @@index([categoryId])
+  @@map("destination_categories")
+}
+
+model DestinationTag {
+  destinationId String @map("destination_id") @db.Uuid
+  tagId         String @map("tag_id") @db.Uuid
+
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  tag         Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([destinationId, tagId])
+  @@index([tagId])
+  @@map("destination_tags")
+}
+
+model FeaturedCollection {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String
+  slug        String        @unique
+  description String?
+  status      ContentStatus @default(DRAFT)
+  sortOrder   Int           @default(0) @map("sort_order")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  items FeaturedCollectionItem[]
+
+  @@index([status])
+  @@map("featured_collections")
+}
+
+model FeaturedCollectionItem {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collectionId  String   @map("collection_id") @db.Uuid
+  destinationId String   @map("destination_id") @db.Uuid
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  collection  FeaturedCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  destination Destination        @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, destinationId])
+  @@unique([collectionId, sortOrder])
+  @@index([destinationId])
+  @@map("featured_collection_items")
 }
