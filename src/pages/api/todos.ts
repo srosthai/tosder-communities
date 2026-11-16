@@ -1,42 +1,61 @@
 import type { APIRoute } from 'astro';
-import { getPrisma, isDatabaseConfigured } from '../../db/prisma';
+import {
+  ApiError,
+  apiRoute,
+  getIdempotencyKey,
+  json,
+  parseJson,
+  rememberIdempotent,
+  replayIdempotent,
+} from '../../lib/api';
+import { getPrisma } from '../../db/prisma';
+import { z } from 'zod';
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
-  });
-}
+const todoSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+});
 
-export const GET: APIRoute = async () => {
-  if (!isDatabaseConfigured()) {
-    return json(
-      {
-        error: 'database_not_configured',
-        message:
-          'Set DATABASE_URL and DIRECT_URL in .env.local to your Neon connection strings.',
-      },
-      503,
-    );
-  }
-
-  try {
+export const GET: APIRoute = apiRoute(
+  async (_context, requestId) => {
     const data = await getPrisma().todo.findMany({
       orderBy: { createdAt: 'asc' },
     });
 
-    return json({ data });
-  } catch (error) {
-    return json(
-      {
-        error: 'database_unavailable',
-        message:
-          error instanceof Error ? error.message : 'Unknown database error.',
-      },
-      503,
-    );
-  }
-};
+    return json({ data, requestId });
+  },
+  { rateLimit: { limit: 120, windowMs: 60_000 } },
+);
+
+export const POST: APIRoute = apiRoute(
+  async ({ request }, requestId) => {
+    const idempotencyKey = getIdempotencyKey(request);
+    if (!idempotencyKey) {
+      throw new ApiError({
+        status: 400,
+        code: 'idempotency_key_required',
+        message: 'Send an Idempotency-Key header with this mutation.',
+      });
+    }
+
+    const cached = replayIdempotent(request, idempotencyKey);
+    if (cached) {
+      return json(cached.body, cached.status, {
+        ...cached.headers,
+        'idempotent-replayed': 'true',
+      });
+    }
+
+    const input = await parseJson(request, todoSchema);
+    const todo = await getPrisma().todo.create({ data: { name: input.name } });
+
+    const body = { data: todo, requestId };
+    rememberIdempotent(request, idempotencyKey, {
+      status: 201,
+      body,
+      headers: { location: `/api/todos/${todo.id}` },
+    });
+
+    return json(body, 201);
+  },
+  { rateLimit: { limit: 30, windowMs: 60_000 } },
+);
