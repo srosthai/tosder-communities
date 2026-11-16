@@ -1,5 +1,5 @@
 ---
-import { getSupabase } from '../db/supabase';
+import { getPrisma } from '../db/prisma';
 
 interface Todo {
   id: string;
@@ -11,25 +11,16 @@ let errorMessage: string | null = null;
 let connected = false;
 
 try {
-  const supabase = getSupabase();
+  const prisma = getPrisma();
   connected = true;
 
-  const { data, error } = await supabase
-    .from('todos')
-    .select('id, name')
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    errorMessage =
-      error.code === 'PGRST205'
-        ? 'Supabase is reachable, but the todos table does not exist yet. Apply the initial Prisma migration to finish the connection.'
-        : error.message;
-  } else {
-    todos = (data ?? []) as Todo[];
-  }
+  todos = await prisma.todo.findMany({
+    select: { id: true, name: true },
+    orderBy: { createdAt: 'asc' },
+  });
 } catch (error) {
   errorMessage =
-    error instanceof Error ? error.message : 'Unable to connect to Supabase.';
+    error instanceof Error ? error.message : 'Unable to connect to Neon.';
 }
 ---
 
@@ -154,13 +145,13 @@ try {
     <main>
       <p class="status">
         <span class:list={['dot', { offline: !connected }]}></span>
-        {connected ? 'Supabase connected' : 'Supabase not ready'}
+        {connected ? 'Neon connected' : 'Neon not ready'}
       </p>
 
       <h1>Tosder Communities</h1>
       <p>
         Backend connection check. This page reads the temporary <code>todos</code>
-        table to verify the Supabase and Prisma setup.
+        table through Prisma and Neon.
       </p>
 
       {

@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getSupabase } from '../../db/supabase';
+import { getPrisma, isDatabaseConfigured } from '../../db/prisma';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -12,33 +12,29 @@ function json(body: unknown, status = 200): Response {
 }
 
 export const GET: APIRoute = async () => {
-  try {
-    const { data, error } = await getSupabase()
-      .from('todos')
-      .select('id, name, created_at')
-      .order('created_at', { ascending: true });
+  if (!isDatabaseConfigured()) {
+    return json(
+      {
+        error: 'database_not_configured',
+        message:
+          'Set DATABASE_URL and DIRECT_URL in .env.local to your Neon connection strings.',
+      },
+      503,
+    );
+  }
 
-    if (error) {
-      return json(
-        {
-          error: 'todos_unavailable',
-          message: error.message,
-          hint:
-            error.code === 'PGRST205'
-              ? 'Apply the initial Prisma migration or run the SQL from prisma/migrations in the Supabase SQL editor.'
-              : undefined,
-        },
-        503,
-      );
-    }
+  try {
+    const data = await getPrisma().todo.findMany({
+      orderBy: { createdAt: 'asc' },
+    });
 
     return json({ data });
   } catch (error) {
     return json(
       {
-        error: 'supabase_unavailable',
+        error: 'database_unavailable',
         message:
-          error instanceof Error ? error.message : 'Unknown Supabase error.',
+          error instanceof Error ? error.message : 'Unknown database error.',
       },
       503,
     );

@@ -22,9 +22,6 @@ dist/
 prisma/*.db
 prisma/*.db-journal
 
-# Supabase local
-supabase/.temp/
-supabase/.branches/
 
 # Test and coverage
 coverage/

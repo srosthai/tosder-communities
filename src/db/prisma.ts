@@ -13,7 +13,7 @@ export function getPrisma(): PrismaClient {
 
   if (!url || !isDatabaseConfigured()) {
     throw new Error(
-      'Database is not configured. Set DATABASE_URL in .env.local with your Supabase database password.',
+      'Database is not configured. Set DATABASE_URL in .env.local with your Neon connection string.',
     );
   }
 

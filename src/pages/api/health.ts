@@ -1,15 +1,5 @@
 import type { APIRoute } from 'astro';
-import { checkDatabase } from '../../db/prisma';
-import { getSupabase } from '../../db/supabase';
-
-type TodoTableStatus = 'available' | 'missing' | 'error' | 'unknown';
-
-interface SupabaseCheck {
-  configured: boolean;
-  reachable: boolean;
-  todosTable: TodoTableStatus;
-  error: string | null;
-}
+import { checkDatabase, getPrisma } from '../../db/prisma';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -23,47 +13,28 @@ function json(body: unknown, status = 200): Response {
 
 export const GET: APIRoute = async () => {
   const startedAt = performance.now();
+  const databaseCheck = await checkDatabase();
 
-  const supabaseCheck: SupabaseCheck = {
-    configured: false,
-    reachable: false,
-    todosTable: 'unknown',
-    error: null,
-  };
+  let todosTable: 'available' | 'missing' | 'unknown' = 'unknown';
 
-  try {
-    const supabase = getSupabase();
-    supabaseCheck.configured = true;
-
-    const { error } = await supabase.from('todos').select('id').limit(1);
-
-    supabaseCheck.reachable = true;
-
-    if (!error) {
-      supabaseCheck.todosTable = 'available';
-    } else if (error.code === 'PGRST205') {
-      supabaseCheck.todosTable = 'missing';
-      supabaseCheck.error = error.message;
-    } else {
-      supabaseCheck.todosTable = 'error';
-      supabaseCheck.error = error.message;
+  if (databaseCheck.reachable) {
+    try {
+      await getPrisma().todo.count();
+      todosTable = 'available';
+    } catch {
+      todosTable = 'missing';
     }
-  } catch (error) {
-    supabaseCheck.error =
-      error instanceof Error ? error.message : 'Unknown Supabase error.';
   }
 
-  const databaseCheck = await checkDatabase();
-  const healthy =
-    supabaseCheck.reachable && databaseCheck.reachable !== false;
+  const healthy = databaseCheck.reachable === true && todosTable === 'available';
 
   return json(
     {
       status: healthy ? 'ok' : 'degraded',
       app: 'tosder-communities',
       checks: {
-        supabase: supabaseCheck,
         database: databaseCheck,
+        todosTable,
       },
       latencyMs: Math.round(performance.now() - startedAt),
       timestamp: new Date().toISOString(),

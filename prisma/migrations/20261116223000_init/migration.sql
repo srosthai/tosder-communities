@@ -8,7 +8,7 @@ CREATE TABLE "todos" (
 );
 
 -- The todos table is a temporary connectivity check. Keep it readable so the
--- sample Astro page and the /api/todos endpoint can prove the Supabase link.
+-- sample Astro page and the /api/todos endpoint can prove the Neon link.
 ALTER TABLE "todos" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "todos_public_read" ON "todos"

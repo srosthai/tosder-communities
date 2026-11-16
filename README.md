@@ -9,10 +9,10 @@ Backend foundation in progress. The product flow is documented in [`cambodia_tra
 ## Stack
 
 - Astro + TypeScript
-- Nitro API
-- Supabase (PostgreSQL, Auth, Storage)
+- Astro server API routes
+- Neon Postgres
 - Prisma ORM
-- Leaflet + PostGIS
+- Leaflet + PostGIS (planned)
 
 ## Development
 
@@ -23,11 +23,13 @@ npm run db:migrate
 npm run dev
 ```
 
-Fill `.env.local` with the Supabase project URL, publishable key, and database password before running the database commands.
+Set `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) in `.env.local` to your Neon connection strings.
+
+The Neon project is linked in `.neon`.
 
 ### API checks
 
-- `GET /api/health` — app, Supabase, and database status
+- `GET /api/health` — app, Neon, and Prisma status
 - `GET /api/todos` — temporary connectivity check
 
 The `todos` table is a smoke test, not part of the final domain model.
