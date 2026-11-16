@@ -30,6 +30,18 @@ test.describe('public visual', () => {
     });
   });
 
+  test('destination detail light', async ({ page }) => {
+    await page.goto('/destinations/angkor-wat');
+    await page.evaluate(() => document.fonts.ready);
+    await page.addStyleTag({
+      content: 'astro-dev-toolbar { display: none !important; }',
+    });
+
+    await expect(page).toHaveScreenshot('public-destination-light.png', {
+      fullPage: true,
+    });
+  });
+
   test('404 page', async ({ page }) => {
     await page.goto('/not-a-real-page');
     await page.evaluate(() => document.fonts.ready);

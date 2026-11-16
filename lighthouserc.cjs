@@ -7,6 +7,7 @@ module.exports = {
       url: [
         'http://127.0.0.1:4322/',
         'http://127.0.0.1:4322/explore',
+        'http://127.0.0.1:4322/destinations/angkor-wat',
         'http://127.0.0.1:4322/design?theme=light',
         'http://127.0.0.1:4322/admin',
       ],

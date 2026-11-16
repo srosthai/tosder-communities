@@ -32,13 +32,17 @@ test.describe('explore', () => {
     await page.goto('/explore');
     await page.getByLabel('Filter by province').selectOption('kampot');
     await expect(page).toHaveURL(/province=kampot/);
+    await expect(page.locator('.destination-card', { hasText: 'Bokor Mountain' })).toBeVisible();
     await expect(page.locator('.destination-card')).toHaveCount(2);
 
     await page.getByRole('link', { name: 'Clear' }).click();
+    await expect(page).toHaveURL(/\/explore$/);
+    await expect(page.locator('.destination-card')).toHaveCount(6);
+
     await page.getByLabel('Filter by category').selectOption('food');
     await expect(page).toHaveURL(/category=food/);
-    await expect(page.locator('.destination-card')).toHaveCount(2);
     await expect(page.locator('.destination-card', { hasText: 'Kep crab market' })).toBeVisible();
+    await expect(page.locator('.destination-card')).toHaveCount(2);
   });
 
   test('shows an empty state and clears filters', async ({ page }) => {
