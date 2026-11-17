@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getPrisma } from '../db/prisma';
+import { requestOrigin } from '../lib/request-origin';
 
 const staticPaths = ['/', '/explore', '/templates', '/leaderboard'];
 
@@ -15,10 +16,11 @@ const escapeXml = (value: string) =>
     return entities[character] ?? character;
   });
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async (context) => {
+  const origin = requestOrigin(context);
   const urls: Array<{ loc: string; lastmod?: string; priority: string }> = staticPaths.map(
     (path) => ({
-      loc: new URL(path, url.origin).toString(),
+      loc: new URL(path, origin).toString(),
       priority: path === '/' ? '1.0' : '0.8',
     }),
   );
@@ -32,7 +34,7 @@ export const GET: APIRoute = async ({ url }) => {
 
     destinations.forEach((destination) => {
       urls.push({
-        loc: new URL(`/destinations/${destination.slug}`, url.origin).toString(),
+        loc: new URL(`/destinations/${destination.slug}`, origin).toString(),
         lastmod: destination.updatedAt.toISOString(),
         priority: '0.7',
       });

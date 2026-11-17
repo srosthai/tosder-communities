@@ -319,7 +319,7 @@ const stepHref = (key: BuilderStep) =>
     noindex
   >
     <section class="builder">
-      <div class="container">
+      <div class="container" data-builder-root>
         <header class="builder__header">
           <div class="builder__identity">
             <a class="back-link" href="/creator">
@@ -335,7 +335,7 @@ const stepHref = (key: BuilderStep) =>
           </div>
           <div class="builder__save">
             <span data-save-state aria-live="polite">Saved</span>
-            <a class="preview-link" href={stepHref('preview')}>
+            <a class="preview-link" href={stepHref('preview')} data-step-link>
               Preview
               <ArrowRight size={13} stroke-width={2} />
             </a>
@@ -1044,20 +1044,33 @@ const stepHref = (key: BuilderStep) =>
 )}
 
 <script>
-  const state = document.querySelector<HTMLElement>('[data-save-state]');
+  import { softSwap } from '../../../scripts/soft-navigation';
+
+  const ROOT = '[data-builder-root]';
   const dirty = new Set<HTMLFormElement>();
   const timers = new WeakMap<HTMLFormElement, number>();
+  const timerIds = new Set<number>();
   const versions = new WeakMap<HTMLFormElement, number>();
   let pending = 0;
+  let busy = false;
+
+  const currentState = () => document.querySelector<HTMLElement>('[data-save-state]');
 
   const setState = (text: string, kind: 'saved' | 'dirty' | 'error' = 'saved') => {
-    if (!state) return;
-    state.textContent = text;
-    state.dataset.state = kind;
+    const element = currentState();
+    if (!element) return;
+    element.textContent = text;
+    element.dataset.state = kind;
+  };
+
+  const clearTimers = () => {
+    for (const id of timerIds) window.clearTimeout(id);
+    timerIds.clear();
   };
 
   const save = async (form: HTMLFormElement) => {
-    if (!dirty.has(form)) return;
+    if (!form.isConnected || !dirty.has(form) || busy) return;
+
     const version = versions.get(form) ?? 0;
     const body = new FormData(form);
     pending += 1;
@@ -1080,7 +1093,8 @@ const stepHref = (key: BuilderStep) =>
         setState('Saved', 'saved');
       } else {
         setState('Unsaved changes', 'dirty');
-        timers.set(form, window.setTimeout(() => save(form), 300));
+        const retry = window.setTimeout(() => save(form), 300);
+        timerIds.add(retry);
       }
     } catch (error) {
       setState(error instanceof Error ? `Not saved: ${error.message}` : 'Not saved', 'error');
@@ -1094,44 +1108,124 @@ const stepHref = (key: BuilderStep) =>
     versions.set(form, (versions.get(form) ?? 0) + 1);
     setState('Unsaved changes', 'dirty');
     const current = timers.get(form);
-    if (current) window.clearTimeout(current);
-    timers.set(form, window.setTimeout(() => save(form), 900));
+    if (current) {
+      window.clearTimeout(current);
+      timerIds.delete(current);
+    }
+    const timer = window.setTimeout(() => save(form), 900);
+    timers.set(form, timer);
+    timerIds.add(timer);
   };
 
-  document.querySelectorAll<HTMLFormElement>('form[data-autosave]').forEach((form) => {
-    form.addEventListener('input', () => schedule(form));
-    form.addEventListener('change', () => schedule(form));
-  });
-
-  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((form) => {
-    form.addEventListener('submit', (event) => {
-      if (!window.confirm(form.dataset.confirm || 'Continue?')) {
-        event.preventDefault();
-      }
-    });
-  });
-
-  const flush = async () => {
+  const flushAll = async () => {
     for (let attempt = 0; attempt < 3 && dirty.size > 0; attempt += 1) {
       for (const form of [...dirty]) {
+        if (!form.isConnected) {
+          dirty.delete(form);
+          continue;
+        }
         const current = timers.get(form);
-        if (current) window.clearTimeout(current);
+        if (current) {
+          window.clearTimeout(current);
+          timerIds.delete(current);
+        }
         await save(form);
       }
     }
+    return dirty.size === 0;
   };
 
-  document.querySelectorAll<HTMLAnchorElement>('a[data-step-link]').forEach((link) => {
-    link.addEventListener('click', async (event) => {
-      if (dirty.size === 0 && pending === 0) return;
-      event.preventDefault();
-      await flush();
-      window.location.href = link.href;
-    });
+  const softNavigate = async (url: string, init?: RequestInit, push = true) => {
+    if (busy) return;
+    if (!(await flushAll())) {
+      throw new Error('Some changes could not be saved.');
+    }
+
+    busy = true;
+    document.querySelector(ROOT)?.setAttribute('aria-busy', 'true');
+    clearTimers();
+    dirty.clear();
+    try {
+      await softSwap({ rootSelector: ROOT, url, init, push });
+    } catch (error) {
+      setState(error instanceof Error ? `Not saved: ${error.message}` : 'Not saved', 'error');
+      throw error;
+    } finally {
+      document.querySelector(ROOT)?.removeAttribute('aria-busy');
+      busy = false;
+    }
+  };
+
+  document.addEventListener('input', (event) => {
+    const form = (event.target as Element).closest<HTMLFormElement>('form[data-autosave]');
+    if (form?.closest(ROOT)) schedule(form);
+  });
+
+  document.addEventListener('change', (event) => {
+    const form = (event.target as Element).closest<HTMLFormElement>('form[data-autosave]');
+    if (form?.closest(ROOT)) schedule(form);
+  });
+
+  document.addEventListener('submit', (event) => {
+    const form = (event.target as HTMLFormElement).closest<HTMLFormElement>('form');
+    if (!form?.closest(ROOT)) return;
+
+    const method = (form.getAttribute('method') || 'get').toLowerCase();
+    if (method !== 'post') return;
+
+    event.preventDefault();
+
+    if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) return;
+
+    const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+    const body = new FormData(form);
+    if (submitter?.name) body.append(submitter.name, submitter.value);
+
+    dirty.delete(form);
+    const timer = timers.get(form);
+    if (timer) {
+      window.clearTimeout(timer);
+      timerIds.delete(timer);
+    }
+
+    const originalLabel = submitter?.textContent;
+    if (submitter) {
+      submitter.disabled = true;
+      submitter.dataset.label = originalLabel ?? '';
+      submitter.textContent = 'Working…';
+    }
+
+    void (async () => {
+      try {
+        await softNavigate(form.action || location.href, {
+          method: 'POST',
+          body,
+        });
+      } catch {
+        if (submitter) {
+          submitter.disabled = false;
+          submitter.textContent = originalLabel ?? 'Retry';
+        }
+      }
+    })();
+  });
+
+  document.addEventListener('click', (event) => {
+    const link = (event.target as Element).closest<HTMLAnchorElement>('a[data-step-link]');
+    if (!link || !link.closest(ROOT)) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (link.target === '_blank') return;
+
+    event.preventDefault();
+    void softNavigate(link.href, { method: 'GET' }).catch(() => undefined);
+  });
+
+  window.addEventListener('popstate', () => {
+    void softNavigate(location.href, { method: 'GET' }, false).catch(() => undefined);
   });
 
   window.addEventListener('beforeunload', (event) => {
-    if (dirty.size === 0 && pending === 0) return;
+    if (dirty.size === 0 && pending === 0 && !busy) return;
     event.preventDefault();
     event.returnValue = '';
   });

@@ -18,7 +18,8 @@ creator.
    handoff to moderation.
 
 Creators can jump between steps at any time. Completion state is derived from
-the draft, not stored separately.
+the draft, not stored separately. Step changes and plan actions use server-backed
+soft navigation, so the page updates in place without a full reload.
 
 ## Saving
 
@@ -30,6 +31,8 @@ the draft, not stored separately.
 - `beforeunload` warns when changes are still unsaved.
 - Item forms also have an explicit **Save item** button for keyboard and
   no-JavaScript fallback.
+- All step and plan actions are submitted with `fetch`, and only the builder
+  region is replaced. Browser history and back/forward navigation still work.
 
 Server validation runs again on every save. Explicit submissions use
 POST/Redirect/GET, so refreshing after a validation error does not resubmit the

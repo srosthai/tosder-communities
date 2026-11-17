@@ -118,8 +118,16 @@ test.describe.serial('template builder', () => {
     await page.getByRole('button', { name: 'Save and continue' }).click();
     await expect(page).toHaveURL(/step=plan/);
 
+    await page.evaluate(() => {
+      (window as unknown as { __softBuilder?: string }).__softBuilder = 'kept';
+    });
     await page.getByRole('button', { name: 'Add day 1' }).click();
     await expect(page).toHaveURL(/step=plan&day=/);
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __softBuilder?: string }).__softBuilder,
+      ),
+    ).toBe('kept');
     const dayUrl = page.url();
 
     await page.getByRole('button', { name: 'Add item' }).click();

@@ -4,9 +4,10 @@ test.describe('seo', () => {
   test('home exposes canonical, social metadata, and WebSite JSON-LD', async ({ page }) => {
     await page.goto('/');
 
+    const origin = new URL(page.url()).origin;
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
       'href',
-      'http://127.0.0.1:4321/',
+      `${origin}/`,
     );
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'index, follow');
     await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
@@ -29,9 +30,10 @@ test.describe('seo', () => {
   test('destination detail exposes article and TouristAttraction metadata', async ({ page }) => {
     await page.goto('/destinations/angkor-wat');
 
+    const origin = new URL(page.url()).origin;
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
       'href',
-      'http://127.0.0.1:4321/destinations/angkor-wat',
+      `${origin}/destinations/angkor-wat`,
     );
     await expect(page.locator('meta[property="og:type"]')).toHaveAttribute('content', 'article');
     await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
@@ -55,9 +57,10 @@ test.describe('seo', () => {
       'content',
       'noindex, nofollow',
     );
+    const origin = new URL(page.url()).origin;
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
       'href',
-      'http://127.0.0.1:4321/explore',
+      `${origin}/explore`,
     );
   });
 
@@ -73,6 +76,6 @@ test.describe('seo', () => {
     expect(robots.status()).toBe(200);
     const text = await robots.text();
     expect(text).toContain('Disallow: /admin');
-    expect(text).toContain('Sitemap: http://127.0.0.1:4321/sitemap.xml');
+    expect(text).toContain(`Sitemap: ${new URL(robots.url()).origin}/sitemap.xml`);
   });
 });
