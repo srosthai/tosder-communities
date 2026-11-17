@@ -778,6 +778,8 @@ async function main() {
         displayName: creator.displayName,
         bio: creator.bio,
         socialLinks: creator.socialLinks,
+        role: 'TRUSTED_CREATOR',
+        trustedCreator: true,
       },
       create: {
         userId: creator.userId,
@@ -786,6 +788,7 @@ async function main() {
         bio: creator.bio,
         socialLinks: creator.socialLinks,
         trustedCreator: true,
+        role: 'TRUSTED_CREATOR',
       },
     });
   }

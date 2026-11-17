@@ -1,18 +1,19 @@
-import { CONTENT_ADMIN_EMAILS } from 'astro:env/server';
 import type { APIContext } from 'astro';
-import { getSessionUser } from './auth-user';
+import { getMemberAccess } from './permissions';
 
-export function isContentAdminEmail(email?: string | null): boolean {
-  if (!email) return false;
-  const allowlist = (CONTENT_ADMIN_EMAILS ?? '')
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-
-  return allowlist.includes(email.toLowerCase());
-}
+export { isContentAdminEmail } from './admin-allowlist';
 
 export async function getContentAdmin(context: APIContext) {
-  const user = await getSessionUser(context);
-  return { user, allowed: Boolean(user && isContentAdminEmail(user.email)) };
+  const access = await getMemberAccess(context);
+  return { user: access.user, allowed: access.can('content.manage') };
+}
+
+export async function getModeratorAccess(context: APIContext) {
+  const access = await getMemberAccess(context);
+  return { user: access.user, allowed: access.can('moderation.queue') };
+}
+
+export async function getAdministratorAccess(context: APIContext) {
+  const access = await getMemberAccess(context);
+  return { user: access.user, allowed: access.can('users.roles') };
 }

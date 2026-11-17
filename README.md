@@ -75,6 +75,7 @@ The `todos` table is a smoke test, not part of the final domain model.
 - [Traveler workflow](./docs/traveler-workflow.md)
 - [Engagement and analytics](./docs/analytics.md)
 - [Deployment](./docs/deployment.md)
+- [Competition operations](./docs/operations.md)
 - [Quality budgets](./docs/quality-budgets.md)
 - [Issues](https://github.com/srosthai/tosder-communities/issues)
 - [Milestones](https://github.com/srosthai/tosder-communities/milestones)

@@ -1,5 +1,6 @@
 import { getPrisma } from '../db/prisma';
 import { ApiError } from './api';
+import { createReport } from './reports';
 
 const EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -198,6 +199,14 @@ export async function reportReview(
   const reported = await getPrisma().tripReview.update({
     where: { id: reviewId },
     data: { status: 'REPORTED', reportReason: trimmed },
+  });
+
+  await createReport({
+    reporterId: userId,
+    targetType: 'REVIEW',
+    targetId: reviewId,
+    reasonCode: 'review_report',
+    details: trimmed,
   });
 
   await getPrisma().auditEvent.create({

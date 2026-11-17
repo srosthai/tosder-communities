@@ -4,6 +4,7 @@ import PublicPage from '../components/public/PublicPage.astro';
 import PublicButton from '../components/public/PublicButton.astro';
 import Badge from '../components/ui/Badge.astro';
 import { getAuthForRequest } from '../lib/auth-server';
+import { getMemberNotifications } from '../lib/reports';
 
 export const prerender = false;
 
@@ -15,6 +16,7 @@ if (!data?.user) {
 }
 
 const user = data.user;
+const notifications = await getMemberNotifications(user.id);
 ---
 
 <PublicPage
@@ -74,6 +76,22 @@ const user = data.user;
       <ShieldCheck size={13} stroke-width={1.75} />
       Public templates never expose private trip data.
     </p>
+
+    {notifications.length > 0 && (
+      <section class="notifications" aria-labelledby="notifications-heading">
+        <h2 id="notifications-heading">Moderation notifications</h2>
+        <ul>
+          {notifications.map((notification) => (
+            <li>
+              <strong>{notification.title}</strong>
+              {notification.body && <p>{notification.body}</p>}
+              <span>{notification.createdAt.toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+              {notification.link && <a href={notification.link}>Open</a>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
   </div>
 </PublicPage>
 
@@ -183,6 +201,52 @@ const user = data.user;
   }
 
   .signout-button:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .notifications {
+    margin: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .notifications h2 {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .notifications ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .notifications li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+  }
+
+  .notifications p {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .notifications span {
+    color: var(--color-text-subtle);
+  }
+
+  .notifications a {
+    color: var(--color-text);
     text-decoration: underline;
     text-underline-offset: 2px;
   }

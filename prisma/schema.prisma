@@ -60,6 +60,47 @@ enum ReviewStatus {
   HIDDEN
 }
 
+enum MemberRole {
+  MEMBER
+  TRUSTED_CREATOR
+  MODERATOR
+  ADMINISTRATOR
+}
+
+enum ReportTargetType {
+  TEMPLATE
+  REVIEW
+  USER
+  COMMENT
+}
+
+enum ReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+  ESCALATED
+}
+
+enum ReportPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CompetitionStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  FINALIZED
+}
+
+enum LeaderboardStatus {
+  PROVISIONAL
+  FINAL
+  SUPERSEDED
+}
+
 // Temporary connectivity model. Remove once the status smoke test is replaced
 // by a real health check.
 model Todo {
@@ -238,6 +279,10 @@ model AuditEvent {
   entityId   String?  @map("entity_id")
   summary    String
   metadata   Json?
+  requestId  String?  @map("request_id")
+  reason     String?
+  before     Json?
+  after      Json?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([entityType, entityId])
@@ -254,6 +299,8 @@ model MemberProfile {
   avatarUrl   String?  @map("avatar_url")
   socialLinks Json?    @map("social_links")
   trustedCreator Boolean @default(false) @map("trusted_creator")
+  role        MemberRole @default(MEMBER)
+  suspendedAt DateTime? @map("suspended_at") @db.Timestamptz(6)
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -265,6 +312,9 @@ model MemberProfile {
   reviews   TripReview[]
   likes     TemplateLike[]
   engagementEvents EngagementEvent[]
+  rewards   Reward[]
+  reportsMade Report[] @relation("ReportedBy")
+  notifications MemberNotification[]
 
   @@index([username])
   @@map("member_profiles")
@@ -623,4 +673,141 @@ model EngagementEvent {
   @@index([userId, occurredAt])
   @@index([occurredAt])
   @@map("engagement_events")
+}
+
+model Competition {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title          String
+  slug           String            @unique
+  description    String?
+  rules          String?
+  rulesUrl       String?           @map("rules_url")
+  status         CompetitionStatus @default(DRAFT)
+  timezone       String            @default("Asia/Phnom_Penh")
+  startsAt       DateTime?         @map("starts_at") @db.Timestamptz(6)
+  endsAt         DateTime?         @map("ends_at") @db.Timestamptz(6)
+  prizePoolCents Int?              @map("prize_pool_cents")
+  currency       String            @default("USD")
+  fundingSource  String?           @map("funding_source")
+  createdById    String            @map("created_by_id")
+  publishedAt    DateTime?         @map("published_at") @db.Timestamptz(6)
+  closedAt       DateTime?         @map("closed_at") @db.Timestamptz(6)
+  finalizedAt    DateTime?         @map("finalized_at") @db.Timestamptz(6)
+  version        Int               @default(1)
+  changeReason   String?           @map("change_reason")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  prizes    CompetitionPrize[]
+  snapshots LeaderboardSnapshot[]
+  rewards   Reward[]
+
+  @@index([status, startsAt])
+  @@map("competitions")
+}
+
+model CompetitionPrize {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competitionId String @map("competition_id") @db.Uuid
+  rank          Int
+  amountCents   Int    @map("amount_cents")
+  label         String?
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, rank])
+  @@index([competitionId])
+  @@map("competition_prizes")
+}
+
+model LeaderboardSnapshot {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competitionId String            @map("competition_id") @db.Uuid
+  versionNumber Int               @map("version_number")
+  status        LeaderboardStatus @default(PROVISIONAL)
+  ruleVersion   String            @default("v1") @map("rule_version")
+  entries       Json
+  generatedAt   DateTime          @default(now()) @map("generated_at") @db.Timestamptz(6)
+  createdById   String            @map("created_by_id")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, versionNumber])
+  @@index([competitionId, status])
+  @@map("leaderboard_snapshots")
+}
+
+model Reward {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competitionId  String       @map("competition_id") @db.Uuid
+  rank           Int
+  recipientId    String       @map("recipient_id")
+  amountCents    Int          @map("amount_cents")
+  currency       String       @default("USD")
+  status         RewardStatus @default(PENDING)
+  reason         String?
+  approvedById   String?      @map("approved_by_id")
+  approvedAt     DateTime?    @map("approved_at") @db.Timestamptz(6)
+  payoutReference String?     @unique @map("payout_reference")
+  payoutMethod   String?      @map("payout_method")
+  paidAt         DateTime?    @map("paid_at") @db.Timestamptz(6)
+  proofUrl       String?      @map("proof_url")
+  voidReason     String?      @map("void_reason")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Restrict)
+  recipient   MemberProfile @relation(fields: [recipientId], references: [userId], onDelete: Restrict)
+
+  @@unique([competitionId, rank])
+  @@index([competitionId, status])
+  @@index([recipientId])
+  @@map("rewards")
+}
+
+enum RewardStatus {
+  PENDING
+  APPROVED
+  PAYABLE
+  PAID
+  VOID
+}
+
+model Report {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporterId     String           @map("reporter_id")
+  targetType     ReportTargetType @map("target_type")
+  targetId       String           @map("target_id")
+  reasonCode     String           @map("reason_code")
+  details        String?
+  status         ReportStatus     @default(OPEN)
+  priority       ReportPriority   @default(MEDIUM)
+  internalNote   String?          @map("internal_note")
+  assignedToId   String?          @map("assigned_to_id")
+  resolutionAction String?        @map("resolution_action")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  resolvedAt     DateTime?        @map("resolved_at") @db.Timestamptz(6)
+
+  reporter MemberProfile @relation("ReportedBy", fields: [reporterId], references: [userId], onDelete: Cascade)
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([status, priority, createdAt])
+  @@index([targetType, targetId])
+  @@map("reports")
+}
+
+model MemberNotification {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id")
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user MemberProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("member_notifications")
 }

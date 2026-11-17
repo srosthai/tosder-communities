@@ -1,209 +1,217 @@
 ---
-import { Banknote, ChevronDown, CircleCheck, Clock, Download, Plus, Wallet } from '@lucide/astro';
+import { ArrowRight, Banknote, Check, CircleAlert, ShieldCheck } from '@lucide/astro';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import PageHeader from '../../components/admin/PageHeader.astro';
-import DataTable from '../../components/admin/DataTable.astro';
-import StatCard from '../../components/admin/StatCard.astro';
 import Badge from '../../components/ui/Badge.astro';
 import Button from '../../components/ui/Button.astro';
+import { ApiError } from '../../lib/api';
+import { getAdministratorAccess } from '../../lib/admin-auth';
+import { getPrisma } from '../../db/prisma';
+import {
+  approveReward,
+  listRewards,
+  markRewardPaid,
+  rewardReconciliation,
+  rewardStatusLabel,
+  voidReward,
+} from '../../lib/rewards';
 
-const rewards = [
-  { recipient: 'Sokha Meas', competition: 'October 2026', rank: '1st', amount: '$200', status: 'Paid', method: 'Bank transfer', reference: 'PAY-1042', date: 'Nov 4, 2026', initials: 'SM' },
-  { recipient: 'Vannak Heng', competition: 'October 2026', rank: '2nd', amount: '$120', status: 'Awaiting approval', method: 'Bank transfer', reference: '—', date: '—', initials: 'VH' },
-  { recipient: 'Dara Lim', competition: 'October 2026', rank: '3rd', amount: '$80', status: 'Payable', method: 'Bank transfer', reference: '—', date: '—', initials: 'DL' },
-  { recipient: 'Malis Chhay', competition: 'October 2026', rank: '4th', amount: '$50', status: 'Payable', method: 'Bank transfer', reference: '—', date: '—', initials: 'MC' },
-  { recipient: 'Pisey Nou', competition: 'October 2026', rank: '5th', amount: '$50', status: 'Paid', method: 'Bank transfer', reference: 'PAY-1039', date: 'Nov 3, 2026', initials: 'PN' },
-  { recipient: 'Bopha Sok', competition: 'September 2026', rank: '4th', amount: '$50', status: 'Paid', method: 'Bank transfer', reference: 'PAY-1021', date: 'Oct 2, 2026', initials: 'BS' },
-  { recipient: 'Chanthou Ith', competition: 'September 2026', rank: '5th', amount: '$50', status: 'Paid', method: 'Bank transfer', reference: 'PAY-1018', date: 'Oct 2, 2026', initials: 'CI' },
-  { recipient: 'Kosal Tan', competition: 'September 2026', rank: '3rd', amount: '$80', status: 'Void', method: '—', reference: '—', date: 'Sep 30, 2026', initials: 'KT' },
-];
+export const prerender = false;
 
-const statusVariant = (status: string) =>
-  status === 'Paid'
-    ? 'success'
-    : status === 'Payable'
-      ? 'info'
-      : status === 'Awaiting approval'
-        ? 'warning'
-        : 'neutral';
+const { user, allowed } = await getAdministratorAccess(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+if (allowed && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const rewardId = String(form.get('rewardId') ?? '');
+
+  try {
+    if (intent === 'approve') {
+      await approveReward({ id: user.id, email: user.email }, rewardId, String(form.get('reason') ?? ''));
+    }
+    if (intent === 'pay') {
+      await markRewardPaid({ id: user.id, email: user.email }, rewardId, {
+        reference: String(form.get('reference') ?? ''),
+        method: String(form.get('method') ?? 'manual'),
+        proofUrl: String(form.get('proofUrl') ?? ''),
+      });
+    }
+    if (intent === 'void') {
+      await voidReward({ id: user.id, email: user.email }, rewardId, String(form.get('reason') ?? ''));
+    }
+    return Astro.redirect('/admin/rewards?notice=updated');
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'The action could not be completed.';
+    return Astro.redirect(`/admin/rewards?error=${encodeURIComponent(message)}`);
+  }
+}
+
+const rewards = allowed ? await listRewards() : [];
+const competitionId = Astro.url.searchParams.get('competition');
+const competitions = allowed
+  ? await getPrisma().competition.findMany({
+      where: { status: { in: ['FINALIZED'] } },
+      orderBy: { endsAt: 'desc' },
+      include: { prizes: { orderBy: { rank: 'asc' } } },
+    })
+  : [];
+const reconciliation = competitionId ? await rewardReconciliation(competitionId) : null;
+const selectedCompetition = competitionId
+  ? await getPrisma().competition.findUnique({ where: { id: competitionId }, select: { title: true, currency: true } })
+  : null;
+const notice = Astro.url.searchParams.get('notice');
+const error = Astro.url.searchParams.get('error');
+const filtered = competitionId ? rewards.filter((reward) => reward.competitionId === competitionId) : rewards;
+const money = (cents: number, currency: string) =>
+  new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(cents / 100);
 ---
 
 <AdminLayout title="Rewards">
   <PageHeader
-    title="Rewards"
-    description="Approve prize allocations and record manual payouts with a full audit trail."
-  />
+    title="Reward ledger"
+    description="Approve finalized competition rewards and record manual payouts with a reference. No money moves automatically."
+  >
+    <a class="header-link" href="/admin/competitions">Competitions <ArrowRight size={12} stroke-width={2} /></a>
+  </PageHeader>
 
-  <div class="reward-stats">
-    <StatCard label="Awaiting approval" value="$120" hint="1 reward" trend="Action needed" tone="warning">
-      <Clock slot="icon" size={16} stroke-width={1.75} />
-    </StatCard>
-    <StatCard label="Payable" value="$180" hint="3 rewards" trend="Ready to pay" tone="positive">
-      <Banknote slot="icon" size={16} stroke-width={1.75} />
-    </StatCard>
-    <StatCard label="Paid this month" value="$500" hint="5 payouts" trend="Reconciled" tone="positive">
-      <CircleCheck slot="icon" size={16} stroke-width={1.75} />
-    </StatCard>
+  {notice === 'updated' && <p class="notice notice--success" role="status">Reward ledger updated.</p>}
+  {error && <p class="notice notice--error" role="alert">{error}</p>}
+
+  <div class="banner">
+    <ShieldCheck size={14} stroke-width={1.75} />
+    Payout activation is gated by the M6 legal and compliance sign-off. This ledger records approved manual
+    payouts only.
   </div>
 
-  <DataTable
-    title="Payout ledger"
-    description="Manual payouts only. Every status change is recorded."
-    headingLevel="h2"
-    searchPlaceholder="Search by recipient or reference…"
-    filters={[
-      { label: 'Paid', value: 'paid' },
-      { label: 'Payable', value: 'payable' },
-      { label: 'Awaiting approval', value: 'awaiting-approval' },
-      { label: 'Void', value: 'void' },
-    ]}
-  >
-    <Wallet slot="icon" size={18} stroke-width={1.75} />
-    <Fragment slot="actions">
-      <Button variant="secondary" size="sm">
-        <Download size={14} stroke-width={1.75} />
-        Export ledger
-      </Button>
-      <Button variant="primary" size="sm">
-        <Plus size={14} stroke-width={2} />
-        Record payout
-      </Button>
-    </Fragment>
+  {!allowed ? (
+    <p class="forbidden" role="alert">Administrator access required.</p>
+  ) : (
+    <>
+      <form method="get" class="filter">
+        <label>
+          <span>Competition</span>
+          <select name="competition">
+            <option value="">All finalized competitions</option>
+            {competitions.map((competition) => (
+              <option value={competition.id} selected={competitionId === competition.id}>{competition.title}</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit">Filter</button>
+        {competitionId && <a href="/admin/rewards">Clear</a>}
+      </form>
 
-    <thead>
-      <tr>
-        <th scope="col">Recipient</th>
-        <th scope="col">Competition</th>
-        <th scope="col">Rank</th>
-        <th scope="col">Amount</th>
-        <th scope="col">Status</th>
-        <th scope="col">Method</th>
-        <th scope="col">Reference</th>
-        <th scope="col">Date</th>
-        <th scope="col"><span class="sr-only">Actions</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      {rewards.map((reward) => (
-        <tr
-          data-search={`${reward.recipient} ${reward.competition} ${reward.status} ${reward.reference}`}
-          data-filter={reward.status.toLowerCase().replaceAll(' ', '-')}
-        >
-          <td>
-            <span class="cell-main">
-              <span class="member-avatar" aria-hidden="true">{reward.initials}</span>
-              <span class="cell-copy">
-                <strong>{reward.recipient}</strong>
-                <span>{reward.competition}</span>
-              </span>
-            </span>
-          </td>
-          <td class="muted">{reward.competition}</td>
-          <td class="numeric">{reward.rank}</td>
-          <td class="numeric"><strong>{reward.amount}</strong></td>
-          <td><Badge variant={statusVariant(reward.status)} dot>{reward.status}</Badge></td>
-          <td class="muted">{reward.method}</td>
-          <td class="mono">{reward.reference}</td>
-          <td class="muted">{reward.date}</td>
-          <td class="actions">
-            <a class="table-action" href={`/admin/rewards?reward=${reward.reference}`}>
-              Open <ChevronDown size={12} stroke-width={1.75} />
-            </a>
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </DataTable>
+      {reconciliation && (
+        <div class:list={['reconciliation', { 'is-bad': !reconciliation.matches }]}>
+          <CircleAlert size={14} stroke-width={1.75} />
+          <span>
+            {selectedCompetition?.title}: prizes {money(reconciliation.prizeTotal, selectedCompetition?.currency ?? 'USD')} ·
+            rewards {money(reconciliation.rewardTotal, selectedCompetition?.currency ?? 'USD')} ·
+            {reconciliation.matches ? ' reconciled' : ' mismatch'}
+          </span>
+        </div>
+      )}
 
-  <p class="page-note">Payouts are manual in the MVP. Every approval and status change is audited.</p>
+      {filtered.length === 0 ? (
+        <div class="empty">
+          <Banknote size={22} stroke-width={1.75} />
+          <h2>No rewards yet.</h2>
+          <p>Finalize a competition, then use “Create rewards” on its lifecycle panel.</p>
+          <a class="primary-link" href="/admin/competitions">Open competitions</a>
+        </div>
+      ) : (
+        <div class="reward-list">
+          {filtered.map((reward) => (
+            <article class="reward">
+              <div class="reward-head">
+                <div>
+                  <strong>Rank {reward.rank} · {reward.recipient.displayName}</strong>
+                  <span>@{reward.recipient.username} · {reward.competition.title}</span>
+                </div>
+                <span class="amount">{money(reward.amountCents, reward.currency)}</span>
+                <Badge
+                  variant={reward.status === 'PAID' ? 'success' : reward.status === 'VOID' ? 'neutral' : reward.status === 'APPROVED' ? 'info' : 'warning'}
+                  dot
+                >
+                  {rewardStatusLabel[reward.status]}
+                </Badge>
+              </div>
+
+              {reward.status === 'PENDING' && (
+                <form method="post" class="action-form">
+                  <input type="hidden" name="intent" value="approve" />
+                  <input type="hidden" name="rewardId" value={reward.id} />
+                  <input name="reason" required minlength="3" maxlength="500" placeholder="Approval reason / eligibility check" />
+                  <Button type="submit" variant="primary" size="sm"><Check size={13} stroke-width={2} />Approve</Button>
+                </form>
+              )}
+
+              {(reward.status === 'APPROVED' || reward.status === 'PAYABLE') && (
+                <form method="post" class="action-form">
+                  <input type="hidden" name="intent" value="pay" />
+                  <input type="hidden" name="rewardId" value={reward.id} />
+                  <input name="reference" required minlength="3" maxlength="120" placeholder="Payout reference" />
+                  <input name="method" value="manual" maxlength="40" aria-label="Payout method" />
+                  <input name="proofUrl" placeholder="Proof URL (optional)" />
+                  <Button type="submit" variant="primary" size="sm"><Banknote size={13} stroke-width={2} />Mark paid</Button>
+                </form>
+              )}
+
+              {reward.status !== 'PAID' && reward.status !== 'VOID' && (
+                <form method="post" class="action-form action-form--quiet">
+                  <input type="hidden" name="intent" value="void" />
+                  <input type="hidden" name="rewardId" value={reward.id} />
+                  <input name="reason" required minlength="3" maxlength="500" placeholder="Void reason" />
+                  <Button type="submit" variant="danger" size="sm">Void</Button>
+                </form>
+              )}
+
+              {reward.status === 'PAID' && (
+                <p class="paid-note">
+                  Paid {reward.paidAt?.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })} ·
+                  reference {reward.payoutReference} · method {reward.payoutMethod}
+                </p>
+              )}
+              {reward.status === 'VOID' && <p class="void-note">Void: {reward.voidReason}</p>}
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  )}
 </AdminLayout>
 
 <style>
-  .reward-stats {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-3);
-    margin-bottom: var(--space-4);
-  }
-
-  .cell-main {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    min-width: 12rem;
-  }
-
-  .member-avatar {
-    display: inline-grid;
-    place-items: center;
-    width: 1.75rem;
-    height: 1.75rem;
-    flex: none;
-    border-radius: var(--radius-full);
-    background: var(--color-surface-sunken);
-    color: var(--color-text-muted);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-semibold);
-  }
-
-  .cell-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .cell-copy strong {
-    font-size: var(--text-md);
-    font-weight: var(--weight-medium);
-  }
-
-  .cell-copy span {
-    color: var(--color-text-subtle);
-    font-size: var(--text-xs);
-  }
-
-  .numeric {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .muted {
-    color: var(--color-text-muted);
-  }
-
-  .mono {
-    color: var(--color-text-muted);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-  }
-
-  .actions {
-    text-align: right;
-  }
-
-  .table-action {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    color: var(--color-text-muted);
-    font-size: var(--text-sm);
-    white-space: nowrap;
-  }
-
-  .table-action:hover {
-    color: var(--color-text);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .page-note {
-    margin-top: var(--space-3);
-    color: var(--color-text-subtle);
-    font-size: var(--text-xs);
-  }
-
-  @media (max-width: 900px) {
-    .reward-stats {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
+  .header-link { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-muted); font-size: var(--text-sm); text-decoration: underline; text-underline-offset: 2px; }
+  .notice { margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); font-size: var(--text-sm); }
+  .notice--success { background: var(--color-success-bg); color: var(--color-success-text); border-color: color-mix(in oklch, var(--color-success) 40%, transparent); }
+  .notice--error { background: var(--color-danger-bg); color: var(--color-danger-text); border-color: color-mix(in oklch, var(--color-danger) 40%, transparent); }
+  .banner { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-subtle); color: var(--color-text-muted); font-size: var(--text-xs); }
+  .forbidden, .empty { padding: var(--space-6); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; }
+  .empty h2 { color: var(--color-text); font-size: var(--text-lg); font-weight: var(--weight-semibold); }
+  .primary-link { color: var(--color-text); font-size: var(--text-sm); text-decoration: underline; text-underline-offset: 2px; }
+  .filter { display: flex; align-items: flex-end; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .filter label { display: flex; flex-direction: column; gap: var(--space-1); }
+  .filter span { color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .filter select, .filter button { height: var(--control-height-sm); padding: 0 var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font-size: var(--text-sm); }
+  .filter a { color: var(--color-text-subtle); font-size: var(--text-xs); text-decoration: underline; }
+  .reconciliation { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); color: var(--color-success-text); font-size: var(--text-xs); }
+  .reconciliation.is-bad { color: var(--color-danger-text); }
+  .reward-list { display: flex; flex-direction: column; gap: var(--space-2); }
+  .reward { padding: var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+  .reward-head { display: flex; align-items: center; gap: var(--space-3); }
+  .reward-head > div { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .reward-head strong { font-size: var(--text-sm); }
+  .reward-head span { color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .amount { color: var(--color-text); font-family: var(--font-mono); font-size: var(--text-sm); }
+  .action-form { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); flex-wrap: wrap; }
+  .action-form input { height: var(--control-height-sm); padding: 0 var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font-size: var(--text-sm); }
+  .action-form input:first-of-type { flex: 1; min-width: 12rem; }
+  .action-form--quiet { opacity: 0.75; }
+  .paid-note, .void-note { margin-top: var(--space-2); color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .void-note { color: var(--color-danger-text); }
 </style>

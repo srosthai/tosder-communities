@@ -66,6 +66,19 @@ export const GET: APIRoute = async (context) => {
         priority: '0.6',
       });
     });
+
+    const competitions = await getPrisma().competition.findMany({
+      where: { status: { in: ['ACTIVE', 'CLOSED', 'FINALIZED'] } },
+      orderBy: { startsAt: 'desc' },
+      select: { slug: true, updatedAt: true },
+    });
+    competitions.forEach((competition) => {
+      urls.push({
+        loc: new URL(`/competitions/${competition.slug}`, origin).toString(),
+        lastmod: competition.updatedAt.toISOString(),
+        priority: '0.6',
+      });
+    });
   } catch {
     // Keep the static sitemap available even if the content query fails.
   }
