@@ -1,0 +1,299 @@
+---
+import { ArrowLeft, ArrowRight, CalendarDays, MapPin } from '@lucide/astro';
+import { z } from 'zod';
+import PublicPage from '../../components/public/PublicPage.astro';
+import Input from '../../components/ui/Input.astro';
+import { getPrisma } from '../../db/prisma';
+import { ApiError } from '../../lib/api';
+import { getSessionUser } from '../../lib/auth-user';
+import { ensureMemberProfile } from '../../lib/profiles';
+import { copyTemplateToTrip } from '../../lib/trips';
+import type { TemplateSnapshot } from '../../lib/template-publishing';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro);
+if (!user) {
+  return Astro.redirect(
+    `/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`,
+  );
+}
+
+await ensureMemberProfile(user);
+
+const templateId = z.uuid().safeParse(Astro.url.searchParams.get('template'));
+const versionId = z.uuid().safeParse(Astro.url.searchParams.get('version'));
+if (!templateId.success || !versionId.success) Astro.response.status = 404;
+
+const template =
+  templateId.success && versionId.success
+    ? await getPrisma().travelTemplate.findFirst({
+        where: {
+          id: templateId.data,
+          status: 'PUBLISHED',
+          publishedVersionId: versionId.data,
+        },
+        include: {
+          creator: { select: { displayName: true, username: true } },
+          province: { select: { name: true } },
+          publishedVersion: { select: { snapshot: true, versionNumber: true } },
+        },
+      })
+    : null;
+
+if (!template) Astro.response.status = 404;
+
+const snapshot = template?.publishedVersion?.snapshot as unknown as TemplateSnapshot | undefined;
+const duration = snapshot?.template.durationDays ?? 1;
+const defaultStart = new Date();
+defaultStart.setUTCDate(defaultStart.getUTCDate() + 14);
+const defaultEnd = new Date(defaultStart);
+defaultEnd.setUTCDate(defaultEnd.getUTCDate() + Math.max(duration - 1, 0));
+const iso = (date: Date) => date.toISOString().slice(0, 10);
+
+let errorMessage: string | null = null;
+const idempotencyKey = crypto.randomUUID();
+
+if (template && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  try {
+    const result = await copyTemplateToTrip({
+      templateId: template.id,
+      versionId: template.publishedVersionId!,
+      idempotencyKey: String(form.get('idempotencyKey') ?? idempotencyKey),
+      startDate: String(form.get('startDate') ?? ''),
+      endDate: String(form.get('endDate') ?? ''),
+      title: String(form.get('title') ?? ''),
+      requestId: null,
+      actor: { id: user.id, email: user.email },
+    });
+    return Astro.redirect(`/trips/${result.trip.id}?copied=1`);
+  } catch (error) {
+    errorMessage =
+      error instanceof ApiError ? error.message : 'The trip could not be created. Try again.';
+  }
+}
+---
+
+{template && snapshot ? (
+  <PublicPage
+    label="Use template"
+    title="Make it yours."
+    description="Copy the itinerary into a private trip. You can change the dates, swap stops, and add notes without touching the original."
+    noindex
+  >
+    <div class="copy-layout">
+      <form method="post" class="copy-form">
+        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+        {errorMessage && <p class="notice notice--error" role="alert">{errorMessage}</p>}
+
+        <section class="source-card" aria-labelledby="source-heading">
+          <p class="label">Source template</p>
+          <h2 id="source-heading">{snapshot.template.title}</h2>
+          <p>{snapshot.template.summary}</p>
+          <div class="source-meta">
+            <span><CalendarDays size={14} stroke-width={1.75} /> {duration} days</span>
+            <span><MapPin size={14} stroke-width={1.75} /> {snapshot.template.province?.name ?? 'Cambodia'}</span>
+            <span>by {template.creator.displayName}</span>
+            <span>v{template.publishedVersion?.versionNumber ?? 1}</span>
+          </div>
+        </section>
+
+        <Input
+          label="Trip title"
+          name="title"
+          value={snapshot.template.title}
+          maxlength={160}
+          required
+        />
+
+        <div class="date-grid">
+          <Input label="Start date" name="startDate" type="date" value={iso(defaultStart)} />
+          <Input label="End date" name="endDate" type="date" value={iso(defaultEnd)} />
+        </div>
+        <p class="hint">
+          You can change these later. The itinerary keeps {duration} {duration === 1 ? 'day' : 'days'} from the template.
+        </p>
+
+        <div class="form-actions">
+          <a class="back-link" href={`/templates/${template.slug}`}>
+            <ArrowLeft size={14} stroke-width={1.75} />
+            Back to template
+          </a>
+          <button class="primary-action" type="submit">
+            Create my trip
+            <ArrowRight size={14} stroke-width={2} />
+          </button>
+        </div>
+      </form>
+
+      <aside class="copy-note">
+        <h2>What happens next</h2>
+        <ul>
+          <li>You get a private copy of every day and stop.</li>
+          <li>The creator's template and version stay unchanged.</li>
+          <li>The source stays visible for attribution.</li>
+          <li>You can edit or delete your copy at any time.</li>
+        </ul>
+      </aside>
+    </div>
+  </PublicPage>
+) : (
+  <PublicPage title="Template not available" description="This template version is not published." noindex>
+    <a class="back-link" href="/templates">
+      <ArrowLeft size={14} stroke-width={1.75} />
+      Browse templates
+    </a>
+  </PublicPage>
+)}
+
+<style>
+  .copy-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(16rem, 0.7fr);
+    gap: var(--space-5);
+    align-items: start;
+  }
+
+  .copy-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .source-card {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+  }
+
+  .source-card h2 {
+    margin: var(--space-1) 0 var(--space-2);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .source-card p {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .source-meta {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .source-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .label {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .date-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .hint {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+    flex-wrap: wrap;
+  }
+
+  .primary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    height: var(--control-height-md);
+    padding: 0 var(--space-4);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .primary-action:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .copy-note {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .copy-note h2 {
+    margin-bottom: var(--space-3);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .copy-note ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding-left: var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .notice {
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .notice--error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  }
+
+  @media (max-width: 900px) {
+    .copy-layout,
+    .date-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

@@ -1,0 +1,140 @@
+---
+import { Bookmark, BookmarkCheck } from '@lucide/astro';
+
+interface Props {
+  type: 'template' | 'destination';
+  id: string;
+  saved: boolean;
+  count: number;
+  signedIn: boolean;
+  redirectTo: string;
+  label?: string;
+}
+
+const {
+  type,
+  id,
+  saved,
+  count,
+  signedIn,
+  redirectTo,
+  label = type === 'template' ? 'Save template' : 'Save destination',
+} = Astro.props;
+---
+
+{signedIn ? (
+  <button
+    type="button"
+    class:list={['save-button', { 'is-saved': saved }]}
+    data-save-button
+    data-save-type={type}
+    data-save-id={id}
+    data-saved={saved ? 'true' : 'false'}
+    data-save-text={label}
+    aria-pressed={saved ? 'true' : 'false'}
+  >
+    {saved ? (
+      <BookmarkCheck size={15} stroke-width={1.75} aria-hidden="true" />
+    ) : (
+      <Bookmark size={15} stroke-width={1.75} aria-hidden="true" />
+    )}
+    <span data-save-label>{saved ? 'Saved' : label}</span>
+    <span class="save-count" data-save-count>{count}</span>
+  </button>
+) : (
+  <a
+    class="save-button"
+    href={`/sign-in?redirectTo=${encodeURIComponent(redirectTo)}`}
+  >
+    <Bookmark size={15} stroke-width={1.75} aria-hidden="true" />
+    <span>{label}</span>
+    <span class="save-count">{count}</span>
+  </a>
+)}
+
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>('[data-save-button]');
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (button.disabled) return;
+
+      const type = button.dataset.saveType;
+      const id = button.dataset.saveId;
+      const wasSaved = button.dataset.saved === 'true';
+      const saveText = button.dataset.saveText ?? 'Save';
+      const label = button.querySelector<HTMLElement>('[data-save-label]');
+      const countEl = button.querySelector<HTMLElement>('[data-save-count]');
+      const previousCount = Number(countEl?.textContent ?? '0');
+
+      const nextSaved = !wasSaved;
+      button.dataset.saved = String(nextSaved);
+      button.classList.toggle('is-saved', nextSaved);
+      button.setAttribute('aria-pressed', String(nextSaved));
+      if (label) label.textContent = nextSaved ? 'Saved' : saveText;
+      if (countEl) countEl.textContent = String(Math.max(0, previousCount + (nextSaved ? 1 : -1)));
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+
+      try {
+        const response = await fetch(`/api/saves/${type}s/${id}`, {
+          method: nextSaved ? 'PUT' : 'DELETE',
+          credentials: 'same-origin',
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error?.message || 'Could not update the save.');
+
+        button.dataset.saved = String(body.data.saved);
+        button.classList.toggle('is-saved', body.data.saved);
+        button.setAttribute('aria-pressed', String(body.data.saved));
+        if (label) label.textContent = body.data.saved ? 'Saved' : saveText;
+        if (countEl) countEl.textContent = String(body.data.count);
+      } catch {
+        button.dataset.saved = String(wasSaved);
+        button.classList.toggle('is-saved', wasSaved);
+        button.setAttribute('aria-pressed', String(wasSaved));
+        if (label) label.textContent = wasSaved ? 'Saved' : saveText;
+        if (countEl) countEl.textContent = String(previousCount);
+      } finally {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    });
+  });
+</script>
+
+<style>
+  .save-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .save-button:hover {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  .save-button.is-saved {
+    border-color: color-mix(in oklch, var(--color-accent) 38%, transparent);
+    background: color-mix(in oklch, var(--color-accent) 10%, var(--color-surface));
+    color: var(--color-text);
+  }
+
+  .save-count {
+    min-width: 1.25rem;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    text-align: right;
+  }
+</style>

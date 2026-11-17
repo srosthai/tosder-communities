@@ -2,11 +2,14 @@
 import { ArrowLeft, ArrowRight, Clock, Download, MapPin, Share2, Wallet } from '@lucide/astro';
 import PublicLayout from '../../layouts/PublicLayout.astro';
 import PublicButton from '../../components/public/PublicButton.astro';
+import SaveButton from '../../components/public/SaveButton.astro';
 import TemplateCard from '../../components/public/TemplateCard.astro';
 import MapView from '../../components/public/MapView.astro';
 import Badge from '../../components/ui/Badge.astro';
-import EmptyState from '../../components/ui/EmptyState.astro';
+import { getSessionUser } from '../../lib/auth-user';
 import { requestOrigin } from '../../lib/request-origin';
+import { getTemplateSaveState } from '../../lib/saves';
+import { getTemplateReviewSummary } from '../../lib/reviews';
 import {
   getPublishedTemplateBySlug,
   listRelatedTemplates,
@@ -25,6 +28,15 @@ if (!template) {
 if (template) {
   void recordTemplateView(template.id);
 }
+
+const user = await getSessionUser(Astro);
+const saveState = template
+  ? await getTemplateSaveState(user?.id ?? null, template.id)
+  : { saved: false, count: 0 };
+
+const reviewSummary = template
+  ? await getTemplateReviewSummary(template.id)
+  : { average: 0, count: 0, reviews: [] };
 
 const related = template ? await listRelatedTemplates(template, 3) : [];
 const snapshot = template?.version.snapshot;
@@ -98,6 +110,15 @@ const jsonLd =
           name: 'Tosder Communities',
           url: origin,
         },
+        ...(reviewSummary.count > 0
+          ? {
+              aggregateRating: {
+                '@type': 'AggregateRating',
+                ratingValue: Number(reviewSummary.average.toFixed(2)),
+                reviewCount: reviewSummary.count,
+              },
+            }
+          : {}),
       }
     : undefined;
 ---
@@ -147,6 +168,14 @@ const jsonLd =
                 <Download size={15} stroke-width={2} />
                 Use this template
               </a>
+              <SaveButton
+                type="template"
+                id={template.id}
+                saved={saveState.saved}
+                count={saveState.count}
+                signedIn={Boolean(user)}
+                redirectTo={`/templates/${template.slug}`}
+              />
               <button class="share-button" type="button" data-share>
                 <Share2 size={15} stroke-width={1.75} />
                 Share
@@ -176,6 +205,13 @@ const jsonLd =
                 <span>·</span>
                 <span>{template.qualifiedUseCount.toLocaleString()} qualified uses</span>
               </div>
+              {reviewSummary.count > 0 && (
+                <div class="rating-fact">
+                  <span>★ {reviewSummary.average.toFixed(1)}</span>
+                  <span>·</span>
+                  <span>{reviewSummary.count} {reviewSummary.count === 1 ? 'review' : 'reviews'}</span>
+                </div>
+              )}
             </div>
 
             {live.description && (
@@ -239,6 +275,44 @@ const jsonLd =
                 <p class="pre-line">{live.logisticsNotes}</p>
               </section>
             )}
+
+            <section class="reviews" aria-labelledby="reviews-heading">
+              <div class="reviews__header">
+                <h2 id="reviews-heading">Traveler reviews</h2>
+                {reviewSummary.count > 0 && (
+                  <span class="reviews__score">
+                    ★ {reviewSummary.average.toFixed(1)} · {reviewSummary.count}{' '}
+                    {reviewSummary.count === 1 ? 'review' : 'reviews'}
+                  </span>
+                )}
+              </div>
+              {reviewSummary.count === 0 ? (
+                <p class="reviews__empty">No reviews yet. Reviews open after a traveler completes a copied trip.</p>
+              ) : (
+                <ul class="review-list">
+                  {reviewSummary.reviews.map((review) => (
+                    <li class="review-item">
+                      <div class="review-item__head">
+                        <a href={`/creators/${review.reviewer.username}`}>{review.reviewer.displayName}</a>
+                        <span class="review-item__stars" aria-label={`${review.rating} out of 5 stars`}>
+                          {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
+                        </span>
+                        <time datetime={review.createdAt.toISOString()}>
+                          {review.createdAt.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </time>
+                      </div>
+                      {review.body && <p>{review.body}</p>}
+                      {user && review.reviewerId !== user.id && (
+                        <button class="report-button" type="button" data-report-review={review.id}>
+                          Report
+                        </button>
+                      )}
+                      {user && review.reviewerId === user.id && <span class="review-item__own">Your review</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
             <a class="back-link" href="/templates">
               <ArrowLeft size={14} stroke-width={1.75} />
@@ -347,6 +421,28 @@ const jsonLd =
     window.setTimeout(() => {
       button.textContent = 'Share';
     }, 2000);
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-report-review]').forEach((report) => {
+    report.addEventListener('click', async () => {
+      const reason = window.prompt('Why are you reporting this review?');
+      if (!reason?.trim()) return;
+
+      report.disabled = true;
+      try {
+        const response = await fetch(`/api/reviews/${report.dataset.reportReview}/report`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ reason }),
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Could not report the review.');
+        report.textContent = 'Reported';
+      } catch {
+        report.disabled = false;
+        report.textContent = 'Report';
+      }
+    });
   });
 </script>
 
@@ -743,6 +839,99 @@ const jsonLd =
 
   .use-button--full {
     width: 100%;
+  }
+
+  .rating-fact {
+    color: var(--color-warning-text);
+  }
+
+  .reviews {
+    margin-top: var(--space-7);
+    padding-top: var(--space-5);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .reviews__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .reviews__header h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .reviews__score {
+    color: var(--color-warning-text);
+    font-size: var(--text-xs);
+  }
+
+  .reviews__empty {
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+  }
+
+  .review-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .review-item {
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+  }
+
+  .review-item__head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .review-item__head a {
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .review-item__stars {
+    color: var(--color-warning-text);
+  }
+
+  .review-item p {
+    margin-top: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .report-button {
+    margin-top: var(--space-2);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .review-item__own {
+    display: inline-block;
+    margin-top: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
   }
 
   .related {

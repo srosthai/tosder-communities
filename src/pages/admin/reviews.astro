@@ -1,0 +1,224 @@
+---
+import { ArrowLeft, EyeOff, Flag } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+import { getContentAdmin } from '../../lib/admin-auth';
+import { hideReview, listReviewsForAdmin } from '../../lib/reviews';
+
+export const prerender = false;
+
+const { user, allowed } = await getContentAdmin(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+if (allowed && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (String(form.get('intent')) === 'hide') {
+    await hideReview({ id: user.id, email: user.email }, String(form.get('reviewId')));
+    return Astro.redirect('/admin/reviews?notice=hidden');
+  }
+}
+
+const reviews = allowed ? await listReviewsForAdmin() : [];
+const reported = reviews.filter((review) => review.status === 'REPORTED');
+const visible = reviews.filter((review) => review.status !== 'REPORTED');
+const notice = Astro.url.searchParams.get('notice');
+---
+
+<AdminLayout title="Reviews">
+  <PageHeader
+    title="Review moderation"
+    description="Reported traveler reviews appear first. Hiding a review removes it from public aggregates immediately."
+  >
+    <a class="back-link" href="/admin/moderation">
+      <ArrowLeft size={14} stroke-width={1.75} />
+      Template review
+    </a>
+  </PageHeader>
+
+  {notice === 'hidden' && <p class="notice notice--success" role="status">Review hidden.</p>}
+
+  {!allowed ? (
+    <p class="forbidden" role="alert">Content admin access required.</p>
+  ) : reviews.length === 0 ? (
+    <div class="empty">No reviews have been written yet.</div>
+  ) : (
+    <div class="review-groups">
+      <section class="group" aria-labelledby="reported-heading">
+        <h2 id="reported-heading">
+          <Flag size={15} stroke-width={1.75} />
+          Reported
+          <Badge variant={reported.length > 0 ? 'danger' : 'neutral'}>{reported.length}</Badge>
+        </h2>
+        {reported.length === 0 ? (
+          <p class="muted">No reported reviews.</p>
+        ) : (
+          <div class="review-list">
+            {reported.map((review) => (
+              <article class="review-row">
+                <div class="review-copy">
+                  <div class="review-head">
+                    <strong>{review.template.title}</strong>
+                    <span>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+                    <Badge variant="danger" dot>Reported</Badge>
+                  </div>
+                  <p class="review-meta">
+                    by {review.reviewer.displayName} · trip “{review.trip.title}” ·{' '}
+                    {review.createdAt.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                  {review.body && <p class="review-body">{review.body}</p>}
+                  {review.reportReason && <p class="report-reason">Report: {review.reportReason}</p>}
+                </div>
+                <form method="post">
+                  <input type="hidden" name="intent" value="hide" />
+                  <input type="hidden" name="reviewId" value={review.id} />
+                  <Button type="submit" variant="danger" size="sm">
+                    <EyeOff size={14} stroke-width={1.75} />
+                    Hide
+                  </Button>
+                </form>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section class="group" aria-labelledby="visible-heading">
+        <h2 id="visible-heading">Other recent reviews <Badge variant="neutral">{visible.length}</Badge></h2>
+        <div class="review-list">
+          {visible.map((review) => (
+            <article class="review-row">
+              <div class="review-copy">
+                <div class="review-head">
+                  <strong>{review.template.title}</strong>
+                  <span>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+                  <Badge variant={review.status === 'HIDDEN' ? 'neutral' : 'success'} dot>{review.status}</Badge>
+                </div>
+                <p class="review-meta">
+                  by {review.reviewer.displayName} · {review.createdAt.toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                </p>
+                {review.body && <p class="review-body">{review.body}</p>}
+              </div>
+              {review.status !== 'HIDDEN' && (
+                <form method="post">
+                  <input type="hidden" name="intent" value="hide" />
+                  <input type="hidden" name="reviewId" value={review.id} />
+                  <Button type="submit" variant="secondary" size="sm">Hide</Button>
+                </form>
+              )}
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  )}
+</AdminLayout>
+
+<style>
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .notice--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  }
+
+  .forbidden,
+  .empty {
+    padding: var(--space-6);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .review-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  .group h2 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .review-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .review-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+  }
+
+  .review-copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .review-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    font-size: var(--text-sm);
+  }
+
+  .review-head span {
+    color: var(--color-warning-text);
+    font-size: var(--text-xs);
+  }
+
+  .review-meta,
+  .report-reason {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .review-body {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .report-reason {
+    color: var(--color-danger-text);
+  }
+
+  .muted {
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+  }
+</style>

@@ -22,10 +22,11 @@
     "lighthouse": "lhci autorun",
     "db:seed": "node prisma/seed.mjs",
     "db:check": "node scripts/check-geography.mjs",
-    "test:auth": "AUTH_E2E=true playwright test tests/auth tests/admin/content-editor.spec.ts tests/creator",
+    "test:auth": "AUTH_E2E=true playwright test tests/auth tests/admin/content-editor.spec.ts tests/creator tests/trips tests/saves tests/reviews --workers=1",
     "db:deploy": "prisma migrate deploy",
     "db:content-check": "node scripts/check-content.mjs",
-    "db:template-check": "node scripts/check-template-schema.mjs"
+    "db:template-check": "node scripts/check-template-schema.mjs",
+    "db:trip-check": "node scripts/check-trip-schema.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.13",

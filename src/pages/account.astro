@@ -55,6 +55,8 @@ const user = data.user;
         Open Creator Studio
         <ArrowRight size={14} stroke-width={2} />
       </PublicButton>
+      <PublicButton href="/trips" variant="secondary">My Trips</PublicButton>
+      <PublicButton href="/saved" variant="secondary">Saved items</PublicButton>
       <PublicButton href="/admin" variant="secondary">Open the admin preview</PublicButton>
       {!user.emailVerified && (
         <a class="verify-link" href="/verify-email">Verify email</a>

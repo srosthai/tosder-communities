@@ -2,11 +2,14 @@
 import { ArrowLeft } from '@lucide/astro';
 import PublicLayout from '../../layouts/PublicLayout.astro';
 import PublicButton from '../../components/public/PublicButton.astro';
+import SaveButton from '../../components/public/SaveButton.astro';
 import DestinationCard from '../../components/public/DestinationCard.astro';
 import MapView from '../../components/public/MapView.astro';
 import EmptyState from '../../components/ui/EmptyState.astro';
 import { getContentAdmin } from '../../lib/admin-auth';
+import { getSessionUser } from '../../lib/auth-user';
 import { requestOrigin } from '../../lib/request-origin';
+import { getDestinationSaveState } from '../../lib/saves';
 import { getDestinationBySlug, listRelatedDestinations } from '../../lib/destinations';
 
 export const prerender = false;
@@ -20,6 +23,10 @@ if (!destination) {
 }
 
 const isPreview = Boolean(destination && destination.status !== 'PUBLISHED');
+const user = await getSessionUser(Astro);
+const saveState = destination
+  ? await getDestinationSaveState(user?.id ?? null, destination.id)
+  : { saved: false, count: 0 };
 
 const related = destination
   ? await listRelatedDestinations(destination.id, destination.province, 3)
@@ -98,6 +105,16 @@ const destinationJsonLd = destination && !isPreview
           <div class="tag-row">
             {destination.categories.map((category) => <span class="tag">{category}</span>)}
             {destination.tags.map((tag) => <span class="tag tag--quiet">{tag}</span>)}
+          </div>
+          <div class="destination-actions">
+            <SaveButton
+              type="destination"
+              id={destination.id}
+              saved={saveState.saved}
+              count={saveState.count}
+              signedIn={Boolean(user)}
+              redirectTo={`/destinations/${destination.slug}`}
+            />
           </div>
         </header>
 

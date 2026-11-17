@@ -77,9 +77,12 @@ const notices: Record<string, string> = {
     title="Template review"
     description="Check completeness and safety before a template reaches travelers. Every decision is written to the audit trail."
   >
-    <Badge variant={pending.length > 0 ? 'warning' : 'success'} dot>
-      {pending.length} awaiting review
-    </Badge>
+    <div class="header-actions">
+      <a class="header-link" href="/admin/reviews">Review reports</a>
+      <Badge variant={pending.length > 0 ? 'warning' : 'success'} dot>
+        {pending.length} awaiting review
+      </Badge>
+    </div>
   </PageHeader>
 
   {notice && notices[notice] && <p class="notice notice--success" role="status">{notices[notice]}</p>}
@@ -211,6 +214,19 @@ const notices: Record<string, string> = {
 </AdminLayout>
 
 <style>
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .header-link {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
   .notice {
     margin-bottom: var(--space-4);
     padding: var(--space-3) var(--space-4);

@@ -811,9 +811,9 @@ async function main() {
         'Book the Bokor mountain transport the night before. The pepper farm is easiest by tuk-tuk; the riverside loop is flat and shaded in the early morning.',
       transport: ['Tuk-tuk', 'Bicycle'],
       audience: ['Couples', 'Slow travelers'],
-      viewCount: 184,
-      saveCount: 23,
-      qualifiedUseCount: 7,
+      viewCount: 0,
+      saveCount: 0,
+      qualifiedUseCount: 0,
       days: [
         {
           title: 'River morning and the mountain road',
@@ -912,9 +912,9 @@ async function main() {
         'Arrange a tuk-tuk for both sunrise starts. Buy the pass before the first morning and keep it with you. The days are hot by 11:00, so plan a real break.',
       transport: ['Tuk-tuk', 'Walking'],
       audience: ['First-time visitors', 'Couples'],
-      viewCount: 326,
-      saveCount: 41,
-      qualifiedUseCount: 12,
+      viewCount: 0,
+      saveCount: 0,
+      qualifiedUseCount: 0,
       days: [
         {
           title: 'Sunrise and the outer galleries',
@@ -1002,9 +1002,9 @@ async function main() {
         'Book the island boat in advance and keep the return day flexible if the weather turns. Bring cash for the island; ATMs are unreliable.',
       transport: ['Boat', 'Tuk-tuk', 'Walking'],
       audience: ['Couples', 'Friends'],
-      viewCount: 241,
-      saveCount: 35,
-      qualifiedUseCount: 9,
+      viewCount: 0,
+      saveCount: 0,
+      qualifiedUseCount: 0,
       days: [
         {
           title: 'Slow boat to Koh Rong',

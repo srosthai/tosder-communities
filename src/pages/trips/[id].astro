@@ -1,0 +1,1342 @@
+---
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
+  Clock,
+  Copy,
+  MapPin,
+  Plus,
+  Trash2,
+} from '@lucide/astro';
+import { z } from 'zod';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Input from '../../components/ui/Input.astro';
+import MapView from '../../components/public/MapView.astro';
+import Select from '../../components/ui/Select.astro';
+import Textarea from '../../components/ui/Textarea.astro';
+import { getPrisma } from '../../db/prisma';
+import { ApiError, json } from '../../lib/api';
+import { getSessionUser } from '../../lib/auth-user';
+import { ensureMemberProfile } from '../../lib/profiles';
+import { canReviewTrip, createReview, deleteReview, updateReview } from '../../lib/reviews';
+import {
+  addChecklistItem,
+  addTripDay,
+  addTripItem,
+  dateInputValue,
+  deriveTripPhase,
+  duplicateTripDay,
+  duplicateTripItem,
+  getTripForOwner,
+  moveTripDay,
+  moveTripItem,
+  removeChecklistItem,
+  removeTripDay,
+  removeTripItem,
+  toggleChecklistItem,
+  tripStatusLabel,
+  tripWarnings,
+  updateTripDay,
+  updateTripItem,
+  updateTripMetadata,
+  type TripDetail,
+} from '../../lib/trips';
+import {
+  findScheduleConflicts,
+  formatMoney,
+  formatTimeRange,
+  itemTypeLabels,
+} from '../../lib/template-builder';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+await ensureMemberProfile(user);
+const id = z.uuid().safeParse(Astro.params.id);
+if (!id.success) Astro.response.status = 404;
+
+let trip = id.success ? await getTripForOwner(id.data, user.id) : null;
+if (!trip) Astro.response.status = 404;
+
+const isAutosave = Astro.request.headers.get('x-autosave') === '1';
+let errorMessage: string | null = Astro.url.searchParams.get('error')?.slice(0, 200) ?? null;
+const saveResponse = () => json({ ok: true, savedAt: new Date().toISOString() });
+
+if (trip && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const value = (name: string) => String(form.get(name) ?? '').trim();
+  const nullable = (name: string) => value(name) || null;
+
+  try {
+    switch (intent) {
+      case 'save-meta': {
+        await updateTripMetadata(trip.id, user.id, {
+          title: value('title'),
+          startDate: value('startDate') || null,
+          endDate: value('endDate') || null,
+          notes: nullable('notes'),
+        });
+        break;
+      }
+      case 'add-day': {
+        const day = await addTripDay(trip.id, user.id);
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?day=${day.id}&saved=1`);
+      }
+      case 'update-day': {
+        await updateTripDay(trip.id, user.id, value('dayId'), {
+          title: value('title'),
+          summary: nullable('summary'),
+          date: value('date') || null,
+        });
+        break;
+      }
+      case 'move-day': {
+        await moveTripDay(trip.id, user.id, value('dayId'), value('direction') === 'up' ? 'up' : 'down');
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1`);
+      }
+      case 'duplicate-day': {
+        await duplicateTripDay(trip.id, user.id, value('dayId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1`);
+      }
+      case 'remove-day': {
+        await removeTripDay(trip.id, user.id, value('dayId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1`);
+      }
+      case 'add-item': {
+        const item = await addTripItem(trip.id, user.id, value('dayId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?day=${value('dayId')}&item=${item.id}&saved=1`);
+      }
+      case 'update-item': {
+        const type = value('type');
+        const allowedTypes = Object.keys(itemTypeLabels) as Array<keyof typeof itemTypeLabels>;
+        await updateTripItem(trip.id, user.id, value('dayId'), value('itemId'), {
+          title: value('title'),
+          type: allowedTypes.includes(type as never)
+            ? (type as keyof typeof itemTypeLabels)
+            : 'ATTRACTION',
+          destinationId: value('destinationId') || null,
+          description: nullable('description'),
+          practicalTips: nullable('practicalTips'),
+          notes: nullable('notes'),
+          startTime: value('startTime') || null,
+          endTime: value('endTime') || null,
+          durationMinutes: value('durationMinutes') ? Number(value('durationMinutes')) : null,
+          estimatedCostCents: value('estimatedCost')
+            ? Math.round(Number(value('estimatedCost')) * 100)
+            : null,
+          photoUrl: nullable('photoUrl'),
+        });
+        break;
+      }
+      case 'move-item': {
+        await moveTripItem(
+          trip.id,
+          user.id,
+          value('dayId'),
+          value('itemId'),
+          value('direction') === 'up' ? 'up' : 'down',
+        );
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?day=${value('dayId')}&saved=1`);
+      }
+      case 'duplicate-item': {
+        await duplicateTripItem(trip.id, user.id, value('dayId'), value('itemId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?day=${value('dayId')}&saved=1`);
+      }
+      case 'remove-item': {
+        await removeTripItem(trip.id, user.id, value('dayId'), value('itemId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?day=${value('dayId')}&saved=1`);
+      }
+      case 'add-checklist': {
+        await addChecklistItem(trip.id, user.id, value('label'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1`);
+      }
+      case 'toggle-checklist': {
+        await toggleChecklistItem(trip.id, user.id, value('itemId'), value('done') === 'on');
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1`);
+      }
+      case 'remove-checklist': {
+        await removeChecklistItem(trip.id, user.id, value('itemId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1`);
+      }
+      case 'create-review': {
+        await createReview({
+          userId: user.id,
+          tripId: trip.id,
+          rating: Number(value('rating')),
+          body: nullable('body'),
+        });
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1#review`);
+      }
+      case 'update-review': {
+        await updateReview(user.id, value('reviewId'), {
+          rating: Number(value('rating')),
+          body: nullable('body'),
+        });
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1#review`);
+      }
+      case 'delete-review': {
+        await deleteReview(user.id, value('reviewId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/trips/${trip.id}?saved=1#review`);
+      }
+      default:
+        break;
+    }
+
+    if (isAutosave) return saveResponse();
+    return Astro.redirect(`/trips/${trip.id}?saved=1`);
+  } catch (error) {
+    if (isAutosave) {
+      const message = error instanceof ApiError ? error.message : 'Could not save.';
+      return json({ ok: false, error: message }, error instanceof ApiError ? error.status : 500);
+    }
+    const message = error instanceof ApiError ? error.message : 'The change could not be saved.';
+    return Astro.redirect(`/trips/${trip.id}?error=${encodeURIComponent(message)}`);
+  }
+}
+
+const warnings = trip ? tripWarnings(trip) : [];
+const reviewEligibility = trip ? canReviewTrip(trip, user.id) : { eligible: false, reason: '' };
+const reviewCanEdit = trip?.review
+  ? Date.now() - trip.review.createdAt.getTime() <= 7 * 24 * 60 * 60 * 1000
+  : false;
+const destinations = await getPrisma().destination.findMany({
+  where: { status: 'PUBLISHED' },
+  orderBy: { name: 'asc' },
+  select: { id: true, name: true, province: { select: { name: true } } },
+});
+
+const phase = trip ? deriveTripPhase(trip) : 'draft';
+const saved = Astro.url.searchParams.get('saved') === '1';
+const copied = Astro.url.searchParams.get('copied') === '1';
+const activeDay = Astro.url.searchParams.get('day');
+const activeItem = Astro.url.searchParams.get('item');
+
+const mapPoints = trip
+  ? Array.from(
+      new Map(
+        trip.days
+          .flatMap((day) => day.items)
+          .filter((item) => item.destination?.latitude != null && item.destination?.longitude != null)
+          .map((item) => [
+            item.destination!.slug,
+            {
+              name: item.destination!.name,
+              slug: item.destination!.slug,
+              province: item.destination!.province?.name ?? 'Cambodia',
+              latitude: item.destination!.latitude,
+              longitude: item.destination!.longitude,
+            },
+          ]),
+      ).values(),
+    )
+  : [];
+---
+
+{trip ? (
+  <PublicLayout
+    title={`${trip.title} — My Trips`}
+    description="Edit your private trip itinerary."
+    noindex
+  >
+    <section class="editor-page">
+      <div class="container" data-trip-root>
+        <header class="editor-header">
+          <div>
+            <a class="back-link" href="/trips">
+              <ArrowLeft size={14} stroke-width={1.75} />
+              My Trips
+            </a>
+            <h1>{trip.title}</h1>
+            <div class="meta">
+              <Badge variant={phase === 'archived' ? 'neutral' : 'success'} dot>{tripStatusLabel(phase)}</Badge>
+              <span><CalendarDays size={13} stroke-width={1.75} /> {trip.days.length} days</span>
+              {trip.sourceTemplate && (
+                <span>
+                  From{' '}
+                  {trip.sourceTemplate.status === 'PUBLISHED' ? (
+                    <a href={`/templates/${trip.sourceTemplate.slug}`}>
+                      {trip.sourceTemplateTitle ?? trip.sourceTemplate.title}
+                    </a>
+                  ) : (
+                    trip.sourceTemplateTitle ?? trip.sourceTemplate.title
+                  )}
+                  {trip.sourceVersionNumber ? ` · v${trip.sourceVersionNumber}` : ''}
+                </span>
+              )}
+            </div>
+          </div>
+          <span class="save-state" data-save-state aria-live="polite">Saved</span>
+        </header>
+
+        {saved && <p class="notice notice--success" role="status">Trip saved.</p>}
+        {copied && <p class="notice notice--success" role="status">Your trip copy is ready. Make it yours.</p>}
+        {errorMessage && <p class="notice notice--error" role="alert">{errorMessage}</p>}
+
+        {warnings.length > 0 && (
+          <div class="warnings" role="status">
+            <CircleAlert size={15} stroke-width={1.75} />
+            <ul>
+              {warnings.map((warning) => <li>{warning}</li>)}
+            </ul>
+          </div>
+        )}
+
+        <div class="editor-layout">
+          <div class="editor-main">
+            <section class="panel" aria-labelledby="trip-details-heading">
+              <h2 id="trip-details-heading">Trip details</h2>
+              <form method="post" data-autosave class="meta-form">
+                <input type="hidden" name="intent" value="save-meta" />
+                <Input label="Title" name="title" value={trip.title} maxlength={160} />
+                <div class="date-grid">
+                  <Input label="Start date" name="startDate" type="date" value={dateInputValue(trip.startDate)} />
+                  <Input label="End date" name="endDate" type="date" value={dateInputValue(trip.endDate)} />
+                </div>
+                <Textarea label="Personal notes" name="notes" value={trip.notes ?? ''} rows={3} maxlength={4000} />
+              </form>
+            </section>
+
+            <section class="panel" aria-labelledby="itinerary-heading">
+              <div class="panel-heading">
+                <h2 id="itinerary-heading">Itinerary</h2>
+                <form method="post">
+                  <input type="hidden" name="intent" value="add-day" />
+                  <button class="secondary-action" type="submit">
+                    <Plus size={14} stroke-width={2} /> Add day
+                  </button>
+                </form>
+              </div>
+
+              {trip.days.length === 0 ? (
+                <div class="empty">
+                  <p>No days yet.</p>
+                  <form method="post">
+                    <input type="hidden" name="intent" value="add-day" />
+                    <button class="primary-action" type="submit">Add day 1</button>
+                  </form>
+                </div>
+              ) : (
+                <div class="days">
+                  {trip.days.map((day, dayIndex) => {
+                    const conflicts = findScheduleConflicts(day.items);
+                    return (
+                      <article class="day" id={`day-${day.id}`}>
+                        <header class="day-header">
+                          <form method="post" data-autosave class="day-title-form">
+                            <input type="hidden" name="intent" value="update-day" />
+                            <input type="hidden" name="dayId" value={day.id} />
+                            <span class="day-badge">Day {day.dayNumber}</span>
+                            <Input label="Day title" name="title" value={day.title ?? ''} maxlength={120} />
+                            <Input label="Day summary" name="summary" value={day.summary ?? ''} maxlength={300} />
+                            <Input label="Date" name="date" type="date" value={dateInputValue(day.date)} />
+                          </form>
+                          <div class="day-actions">
+                            <form method="post">
+                              <input type="hidden" name="intent" value="move-day" />
+                              <input type="hidden" name="dayId" value={day.id} />
+                              <input type="hidden" name="direction" value="up" />
+                              <button class="icon-action" type="submit" aria-label={`Move day ${day.dayNumber} up`} disabled={dayIndex === 0}>
+                                <ChevronUp size={14} stroke-width={2} />
+                              </button>
+                            </form>
+                            <form method="post">
+                              <input type="hidden" name="intent" value="move-day" />
+                              <input type="hidden" name="dayId" value={day.id} />
+                              <input type="hidden" name="direction" value="down" />
+                              <button class="icon-action" type="submit" aria-label={`Move day ${day.dayNumber} down`} disabled={dayIndex === trip.days.length - 1}>
+                                <ChevronDown size={14} stroke-width={2} />
+                              </button>
+                            </form>
+                            <form method="post">
+                              <input type="hidden" name="intent" value="duplicate-day" />
+                              <input type="hidden" name="dayId" value={day.id} />
+                              <button class="icon-action" type="submit" aria-label={`Duplicate day ${day.dayNumber}`}>
+                                <Copy size={13} stroke-width={1.75} />
+                              </button>
+                            </form>
+                            <form method="post" data-confirm={`Remove day ${day.dayNumber} and all its items?`}>
+                              <input type="hidden" name="intent" value="remove-day" />
+                              <input type="hidden" name="dayId" value={day.id} />
+                              <button class="icon-action icon-action--danger" type="submit" aria-label={`Remove day ${day.dayNumber}`}>
+                                <Trash2 size={13} stroke-width={1.75} />
+                              </button>
+                            </form>
+                          </div>
+                        </header>
+
+                        {conflicts.length > 0 && (
+                          <p class="conflict">
+                            <CircleAlert size={14} stroke-width={1.75} />
+                            Overlap: {conflicts.map((conflict) => `“${conflict.first}” / “${conflict.second}”`).join(', ')}
+                          </p>
+                        )}
+
+                        <div class="items">
+                          {day.items.map((item, itemIndex) => (
+                            <details class="item" open={activeDay === day.id && (activeItem ? item.id === activeItem : itemIndex === 0)}>
+                              <summary class="item-summary">
+                                <span class="item-time">{formatTimeRange(item.startTime, item.endTime)}</span>
+                                <span class="item-title">{item.title || 'Untitled stop'}</span>
+                                <span>{itemTypeLabels[item.type]}</span>
+                              </summary>
+                              <form method="post" data-autosave class="item-form">
+                                <input type="hidden" name="intent" value="update-item" />
+                                <input type="hidden" name="dayId" value={day.id} />
+                                <input type="hidden" name="itemId" value={item.id} />
+                                <div class="item-grid">
+                                  <Input label="Title" name="title" value={item.title} maxlength={120} />
+                                  <Select label="Type" name="type">
+                                    {Object.entries(itemTypeLabels).map(([type, label]) => (
+                                      <option value={type} selected={item.type === type}>{label}</option>
+                                    ))}
+                                  </Select>
+                                  <Select label="Linked destination" name="destinationId">
+                                    <option value="">Custom activity</option>
+                                    {destinations.map((destination) => (
+                                      <option value={destination.id} selected={item.destinationId === destination.id}>
+                                        {destination.name} · {destination.province?.name ?? 'Cambodia'}
+                                      </option>
+                                    ))}
+                                  </Select>
+                                  <Input label="Start time" name="startTime" type="time" value={item.startTime ?? ''} />
+                                  <Input label="End time" name="endTime" type="time" value={item.endTime ?? ''} />
+                                  <Input label="Duration (minutes)" name="durationMinutes" type="number" min="0" step="5" value={item.durationMinutes ?? ''} />
+                                  <Input label="Estimated cost (USD)" name="estimatedCost" type="number" min="0" step="1" value={item.estimatedCostCents != null ? item.estimatedCostCents / 100 : ''} />
+                                  <Input label="Photo URL" name="photoUrl" value={item.photoUrl ?? ''} maxlength={600} />
+                                </div>
+                                <Textarea label="Description" name="description" value={item.description ?? ''} rows={2} maxlength={1200} />
+                                <Textarea label="Practical tips" name="practicalTips" value={item.practicalTips ?? ''} rows={2} maxlength={1200} />
+                                <Textarea label="My notes" name="notes" value={item.notes ?? ''} rows={2} maxlength={1200} />
+                                <div class="item-save">
+                                  <button class="row-action" type="submit">Save item</button>
+                                </div>
+                              </form>
+                              <div class="item-actions">
+                                <form method="post">
+                                  <input type="hidden" name="intent" value="move-item" />
+                                  <input type="hidden" name="dayId" value={day.id} />
+                                  <input type="hidden" name="itemId" value={item.id} />
+                                  <input type="hidden" name="direction" value="up" />
+                                  <button class="row-action" type="submit" disabled={itemIndex === 0}>Move up</button>
+                                </form>
+                                <form method="post">
+                                  <input type="hidden" name="intent" value="move-item" />
+                                  <input type="hidden" name="dayId" value={day.id} />
+                                  <input type="hidden" name="itemId" value={item.id} />
+                                  <input type="hidden" name="direction" value="down" />
+                                  <button class="row-action" type="submit" disabled={itemIndex === day.items.length - 1}>Move down</button>
+                                </form>
+                                <form method="post">
+                                  <input type="hidden" name="intent" value="duplicate-item" />
+                                  <input type="hidden" name="dayId" value={day.id} />
+                                  <input type="hidden" name="itemId" value={item.id} />
+                                  <button class="row-action" type="submit">Duplicate</button>
+                                </form>
+                                <form method="post" data-confirm="Remove this item?">
+                                  <input type="hidden" name="intent" value="remove-item" />
+                                  <input type="hidden" name="dayId" value={day.id} />
+                                  <input type="hidden" name="itemId" value={item.id} />
+                                  <button class="row-action row-action--danger" type="submit">Remove</button>
+                                </form>
+                              </div>
+                            </details>
+                          ))}
+                        </div>
+
+                        <form method="post" class="add-item">
+                          <input type="hidden" name="intent" value="add-item" />
+                          <input type="hidden" name="dayId" value={day.id} />
+                          <button class="secondary-action" type="submit">
+                            <Plus size={14} stroke-width={2} /> Add item
+                          </button>
+                        </form>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+
+          <aside class="editor-side">
+            <section class="panel" aria-labelledby="checklist-heading">
+              <h2 id="checklist-heading">Preparation checklist</h2>
+              <form method="post" class="checklist-add">
+                <input type="hidden" name="intent" value="add-checklist" />
+                <label class="sr-only" for="checklist-label">New checklist item</label>
+                <input id="checklist-label" name="label" placeholder="Add a task…" maxlength={160} required />
+                <button class="secondary-action" type="submit">Add</button>
+              </form>
+              {trip.checklist.length === 0 ? (
+                <p class="muted">No checklist items yet.</p>
+              ) : (
+                <ul class="checklist">
+                  {trip.checklist.map((item) => (
+                    <li>
+                      <form method="post" class="checklist-toggle">
+                        <input type="hidden" name="intent" value="toggle-checklist" />
+                        <input type="hidden" name="itemId" value={item.id} />
+                        <input
+                          type="checkbox"
+                          name="done"
+                          value="on"
+                          checked={item.done}
+                          aria-label={`Mark ${item.label} ${item.done ? 'not done' : 'done'}`}
+                        />
+                        <span class:list={{ 'is-done': item.done }}>{item.label}</span>
+                      </form>
+                      <form method="post">
+                        <input type="hidden" name="intent" value="remove-checklist" />
+                        <input type="hidden" name="itemId" value={item.id} />
+                        <button class="remove-link" type="submit" aria-label={`Remove ${item.label}`}>×</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {mapPoints.length > 0 && (
+              <section class="panel" aria-labelledby="map-heading">
+                <h2 id="map-heading">Map</h2>
+                <details>
+                  <summary>Show stops on the map</summary>
+                  <MapView destinations={mapPoints} height="18rem" zoom={7} label="Stops in this trip" />
+                </details>
+              </section>
+            )}
+
+            <section class="panel" id="review">
+              <h2>Review this trip</h2>
+              {trip.review ? (
+                <div class="review">
+                  <p class="review-stars" aria-label={`${trip.review.rating} out of 5 stars`}>
+                    {'★'.repeat(trip.review.rating)}{'☆'.repeat(5 - trip.review.rating)}
+                  </p>
+                  {trip.review.body && <p class="review-body">{trip.review.body}</p>}
+                  <p class="muted">
+                    Reviewed {trip.review.createdAt.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                  {reviewCanEdit && (
+                    <details class="review-edit">
+                      <summary>Edit review</summary>
+                      <form method="post" class="review-form">
+                        <input type="hidden" name="intent" value="update-review" />
+                        <input type="hidden" name="reviewId" value={trip.review.id} />
+                        <label class="field">
+                          <span>Rating</span>
+                          <select name="rating" required>
+                            {[5, 4, 3, 2, 1].map((value) => (
+                              <option value={value} selected={trip.review!.rating === value}>{value} stars</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label class="field">
+                          <span>Review</span>
+                          <textarea name="body" rows="3" maxlength="4000">{trip.review.body ?? ''}</textarea>
+                        </label>
+                        <button class="secondary-action" type="submit">Save review</button>
+                      </form>
+                    </details>
+                  )}
+                  <form method="post" data-confirm="Delete this review?">
+                    <input type="hidden" name="intent" value="delete-review" />
+                    <input type="hidden" name="reviewId" value={trip.review.id} />
+                    <button class="row-action row-action--danger" type="submit">Delete review</button>
+                  </form>
+                </div>
+              ) : reviewEligibility.eligible ? (
+                <form method="post" class="review-form">
+                  <input type="hidden" name="intent" value="create-review" />
+                  <label class="field">
+                    <span>Rating</span>
+                    <select name="rating" required>
+                      <option value="">Choose a rating</option>
+                      <option value="5">5 — excellent</option>
+                      <option value="4">4 — good</option>
+                      <option value="3">3 — okay</option>
+                      <option value="2">2 — disappointing</option>
+                      <option value="1">1 — poor</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>What should other travelers know?</span>
+                    <textarea name="body" rows="4" maxlength="4000" placeholder="Was the pace realistic? Were the notes accurate?"></textarea>
+                  </label>
+                  <button class="secondary-action" type="submit">Publish review</button>
+                </form>
+              ) : (
+                <p class="muted">{reviewEligibility.reason}</p>
+              )}
+            </section>
+
+            <section class="panel">
+              <h2>Source</h2>
+              {trip.sourceTemplate ? (
+                <p class="source-note">
+                  Copied from{' '}
+                  {trip.sourceTemplate.status === 'PUBLISHED' ? (
+                    <a href={`/templates/${trip.sourceTemplate.slug}`}>
+                      {trip.sourceTemplateTitle ?? trip.sourceTemplate.title}
+                    </a>
+                  ) : (
+                    trip.sourceTemplateTitle ?? trip.sourceTemplate.title
+                  )}
+                  {trip.sourceVersionNumber ? ` · version ${trip.sourceVersionNumber}` : ''}.
+                  This link stays read-only.
+                </p>
+              ) : (
+                <p class="muted">This trip was built from scratch.</p>
+              )}
+            </section>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </PublicLayout>
+) : (
+  <PublicLayout title="Trip not found — My Trips" noindex>
+    <section class="not-found">
+      <div class="container">
+        <p class="label">My Trips</p>
+        <h1>Trip not found.</h1>
+        <p>This trip does not exist or belongs to another traveler.</p>
+        <a class="primary-action" href="/trips">Back to My Trips</a>
+      </div>
+    </section>
+  </PublicLayout>
+)}
+
+<script>
+  import { softSwap } from '../../scripts/soft-navigation';
+
+  const ROOT = '[data-trip-root]';
+  const dirty = new Set<HTMLFormElement>();
+  const timers = new WeakMap<HTMLFormElement, number>();
+  const timerIds = new Set<number>();
+  const versions = new WeakMap<HTMLFormElement, number>();
+  let pending = 0;
+  let busy = false;
+
+  const stateEl = () => document.querySelector<HTMLElement>('[data-save-state]');
+  const setState = (text: string, kind: 'saved' | 'dirty' | 'error' = 'saved') => {
+    const element = stateEl();
+    if (!element) return;
+    element.textContent = text;
+    element.dataset.state = kind;
+  };
+
+  const save = async (form: HTMLFormElement) => {
+    if (!form.isConnected || !dirty.has(form) || busy) return;
+    const version = versions.get(form) ?? 0;
+    const body = new FormData(form);
+    pending += 1;
+    setState('Saving…', 'dirty');
+
+    try {
+      const response = await fetch(form.action || location.href, {
+        method: 'POST',
+        body,
+        headers: { 'x-autosave': '1' },
+        credentials: 'same-origin',
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'Could not save.');
+
+      if ((versions.get(form) ?? 0) === version) {
+        dirty.delete(form);
+        setState('Saved', 'saved');
+      } else {
+        setState('Unsaved changes', 'dirty');
+        const retry = window.setTimeout(() => save(form), 300);
+        timerIds.add(retry);
+      }
+    } catch (error) {
+      setState(error instanceof Error ? `Not saved: ${error.message}` : 'Not saved', 'error');
+    } finally {
+      pending -= 1;
+    }
+  };
+
+  const schedule = (form: HTMLFormElement) => {
+    dirty.add(form);
+    versions.set(form, (versions.get(form) ?? 0) + 1);
+    setState('Unsaved changes', 'dirty');
+    const current = timers.get(form);
+    if (current) {
+      window.clearTimeout(current);
+      timerIds.delete(current);
+    }
+    const timer = window.setTimeout(() => save(form), 900);
+    timers.set(form, timer);
+    timerIds.add(timer);
+  };
+
+  const flush = async () => {
+    for (let attempt = 0; attempt < 3 && dirty.size > 0; attempt += 1) {
+      for (const form of [...dirty]) {
+        if (!form.isConnected) {
+          dirty.delete(form);
+          continue;
+        }
+        const current = timers.get(form);
+        if (current) {
+          window.clearTimeout(current);
+          timerIds.delete(current);
+        }
+        await save(form);
+      }
+    }
+    return dirty.size === 0;
+  };
+
+  document.addEventListener('input', (event) => {
+    const form = (event.target as Element).closest<HTMLFormElement>('form[data-autosave]');
+    if (form?.closest(ROOT)) schedule(form);
+  });
+
+  document.addEventListener('change', (event) => {
+    const target = event.target as HTMLInputElement;
+    const autosaveForm = target.closest<HTMLFormElement>('form[data-autosave]');
+    if (autosaveForm?.closest(ROOT)) {
+      schedule(autosaveForm);
+      return;
+    }
+
+    const form = target.closest<HTMLFormElement>('form');
+    const intent = form?.querySelector<HTMLInputElement>('input[name="intent"]')?.value;
+    if (target.type === 'checkbox' && intent === 'toggle-checklist') {
+      form?.requestSubmit();
+    }
+  });
+
+  document.addEventListener('submit', (event) => {
+    const form = (event.target as HTMLFormElement).closest<HTMLFormElement>('form');
+    if (!form?.closest(ROOT)) return;
+    if ((form.getAttribute('method') || 'get').toLowerCase() !== 'post') return;
+    event.preventDefault();
+
+    if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) return;
+
+    const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+    const body = new FormData(form);
+    if (submitter?.name) body.append(submitter.name, submitter.value);
+
+    dirty.delete(form);
+    const timer = timers.get(form);
+    if (timer) {
+      window.clearTimeout(timer);
+      timerIds.delete(timer);
+    }
+
+    const original = submitter?.textContent;
+    if (submitter) {
+      submitter.disabled = true;
+      submitter.textContent = 'Working…';
+    }
+
+    void (async () => {
+      try {
+        if (!(await flush())) throw new Error('Some changes could not be saved.');
+        busy = true;
+        document.querySelector(ROOT)?.setAttribute('aria-busy', 'true');
+        const response = await fetch(form.action || location.href, {
+          method: 'POST',
+          body,
+          credentials: 'same-origin',
+        });
+        const html = await response.text();
+        if (response.redirected) {
+          await softSwap({ rootSelector: ROOT, url: response.url, init: { method: 'GET' } });
+        } else {
+          const parsed = new DOMParser().parseFromString(html, 'text/html');
+          const next = parsed.querySelector(ROOT);
+          const current = document.querySelector(ROOT);
+          if (next && current) {
+            current.replaceWith(next);
+            window.history.pushState({}, '', response.url || location.href);
+          } else {
+            window.location.assign('/trips');
+          }
+        }
+        dirty.clear();
+        setState('Saved', 'saved');
+      } catch (error) {
+        setState(error instanceof Error ? `Not saved: ${error.message}` : 'Not saved', 'error');
+        if (submitter) {
+          submitter.disabled = false;
+          submitter.textContent = original ?? 'Retry';
+        }
+      } finally {
+        document.querySelector(ROOT)?.removeAttribute('aria-busy');
+        busy = false;
+      }
+    })();
+  });
+
+  window.addEventListener('beforeunload', (event) => {
+    if (dirty.size === 0 && pending === 0 && !busy) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+</script>
+
+<style>
+  .editor-page {
+    padding: clamp(var(--space-6), 5vw, 3rem) 0 clamp(var(--space-10), 8vw, 6rem);
+  }
+
+  .container {
+    width: min(100% - var(--space-8), 72rem);
+    margin: 0 auto;
+  }
+
+  .editor-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  h1 {
+    margin: var(--space-2) 0 var(--space-2);
+    font-size: clamp(1.75rem, 4vw, 2.75rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.045em;
+  }
+
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .meta a {
+    color: var(--color-text-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .save-state {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .save-state[data-state='dirty'] {
+    color: var(--color-warning-text);
+  }
+
+  .save-state[data-state='error'] {
+    color: var(--color-danger-text);
+  }
+
+  .notice {
+    margin-bottom: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .notice--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  }
+
+  .notice--error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  }
+
+  .warnings {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding: var(--space-3);
+    border: var(--border-width) solid color-mix(in oklch, var(--color-warning) 40%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+    font-size: var(--text-xs);
+  }
+
+  .warnings ul {
+    margin: 0;
+    padding-left: var(--space-4);
+  }
+
+  .editor-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(17rem, 0.65fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .editor-main,
+  .editor-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .panel {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .panel h2 {
+    margin-bottom: var(--space-3);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .panel-heading h2 {
+    margin: 0;
+  }
+
+  .meta-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .date-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-5);
+    border: var(--border-width) dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .days {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .day {
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+  }
+
+  .day-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+  }
+
+  .day-title-form {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+    flex: 1;
+    flex-wrap: wrap;
+  }
+
+  .day-badge {
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .day-actions {
+    display: flex;
+    gap: var(--space-1);
+    flex: none;
+  }
+
+  .icon-action {
+    display: inline-grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+  }
+
+  .icon-action:disabled {
+    opacity: 0.35;
+  }
+
+  .icon-action--danger {
+    color: var(--color-danger-text);
+  }
+
+  .conflict {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+    color: var(--color-warning-text);
+    font-size: var(--text-xs);
+  }
+
+  .items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .item {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+  }
+
+  .item-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .item-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .item-time {
+    width: 5.5rem;
+    flex: none;
+    font-family: var(--font-mono);
+  }
+
+  .item-title {
+    flex: 1;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .item-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .item-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .item-save {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .item-actions {
+    display: flex;
+    gap: var(--space-1);
+    padding: 0 var(--space-3) var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .item-actions form {
+    display: contents;
+  }
+
+  .row-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .row-action:disabled {
+    opacity: 0.35;
+  }
+
+  .row-action--danger {
+    color: var(--color-danger-text);
+  }
+
+  .add-item {
+    margin-top: var(--space-3);
+  }
+
+  .primary-action,
+  .secondary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .primary-action {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+  }
+
+  .secondary-action {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+  }
+
+  .checklist-add {
+    display: flex;
+    gap: var(--space-1);
+    margin-bottom: var(--space-3);
+  }
+
+  .checklist-add input {
+    flex: 1;
+    min-width: 0;
+    height: var(--control-height-md);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .checklist li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    border-top: var(--border-width) solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+
+  .checklist-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 1;
+  }
+
+  .checklist-toggle input {
+    accent-color: var(--color-accent);
+  }
+
+  .is-done {
+    color: var(--color-text-subtle);
+    text-decoration: line-through;
+  }
+
+  .remove-link {
+    border: 0;
+    background: transparent;
+    color: var(--color-text-subtle);
+    font-size: var(--text-md);
+  }
+
+  .review {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .review-stars {
+    color: var(--color-warning-text);
+    font-size: var(--text-md);
+    letter-spacing: 0.08em;
+  }
+
+  .review-body {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .review-edit {
+    border-top: var(--border-width) solid var(--color-border);
+    padding-top: var(--space-2);
+  }
+
+  .review-edit summary {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+
+  .review-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .field span {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .field select,
+  .field textarea {
+    width: 100%;
+    padding: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .source-note {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .source-note a {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .muted {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .not-found {
+    padding: var(--space-10) 0;
+  }
+
+  .not-found h1 {
+    margin: var(--space-2) 0;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+  }
+
+  .not-found p {
+    margin-bottom: var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 1000px) {
+    .editor-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .date-grid,
+    .item-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .editor-header {
+      flex-direction: column;
+    }
+
+    .day-header {
+      flex-direction: column;
+    }
+
+    .day-actions {
+      align-self: flex-end;
+    }
+  }
+</style>
