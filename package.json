@@ -29,7 +29,7 @@
     "db:trip-check": "node scripts/check-trip-schema.mjs",
     "db:usage-recompute": "node scripts/recompute-usage.mjs",
     "db:rls-check": "node scripts/check-rls.mjs",
-    "vercel-build": "prisma generate && prisma migrate deploy && astro check && astro build"
+    "vercel-build": "prisma generate && astro check && astro build"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.13",

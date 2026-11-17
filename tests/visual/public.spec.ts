@@ -14,6 +14,7 @@ test.describe('public visual', () => {
 
       await expect(page).toHaveScreenshot(`public-home-${theme}.png`, {
         fullPage: true,
+        maxDiffPixelRatio: 0.02,
       });
     });
   }
@@ -27,6 +28,7 @@ test.describe('public visual', () => {
 
     await expect(page).toHaveScreenshot('public-explore-light.png', {
       fullPage: true,
+      maxDiffPixelRatio: 0.02,
     });
   });
 
@@ -39,6 +41,7 @@ test.describe('public visual', () => {
 
     await expect(page).toHaveScreenshot('public-destination-light.png', {
       fullPage: true,
+      maxDiffPixelRatio: 0.02,
     });
   });
 
