@@ -56,6 +56,19 @@ test.afterAll(async () => {
   await prisma.memberProfile.deleteMany({
     where: { username: { startsWith: 'trip-other' } },
   });
+  const seed = await prisma.travelTemplate.findFirst({
+    where: { slug: 'kampot-slow-weekend' },
+    select: { id: true },
+  });
+  if (seed) {
+    const qualified = await prisma.usageEvent.count({
+      where: { templateId: seed.id, status: 'QUALIFIED' },
+    });
+    await prisma.travelTemplate.update({
+      where: { id: seed.id },
+      data: { qualifiedUseCount: qualified },
+    });
+  }
   await prisma.$disconnect();
 });
 
@@ -99,7 +112,7 @@ test.describe.serial('trip copy flow', () => {
     expect(trip?.sourceVersionNumber).toBe(template.publishedVersion!.versionNumber);
     expect(trip?.days.length).toBe(2);
     expect(trip?.days[0].items.length).toBeGreaterThan(0);
-    expect(trip?.usageEvent?.status).toBe('PENDING');
+    expect(trip?.usageEvent?.status).toBe('QUALIFIED');
     expect(trip?.usageEvent?.requestId).toBeTruthy();
     expect(trip?.usageEvent?.templateVersionId).toBe(template.publishedVersion!.id);
 

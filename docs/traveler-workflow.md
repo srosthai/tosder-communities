@@ -23,8 +23,8 @@ erDiagram
 `POST /api/trips/copy` is the transactional Use Template endpoint.
 
 - Requires a signed-in member and a published template version.
-- Creates the private trip, copied days and items, and a `PENDING` usage event
-  in one transaction.
+- Creates the private trip, copied days and items, and a usage event in one
+  transaction. The event is qualified or invalidated by the usage engine.
 - Stores `source_template_id`, `source_template_version_id`, the source title,
   and the version number on the trip.
 - Requires an idempotency key. A repeated key returns the original trip and

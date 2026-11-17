@@ -26,6 +26,9 @@ export async function saveTemplate(userId: string, templateId: string) {
         where: { id: templateId },
         data: { saveCount: { increment: 1 } },
       });
+      await tx.engagementEvent.create({
+        data: { templateId, userId, eventType: 'SAVE', metadata: { saved: true } },
+      });
     }
 
     const count = await tx.savedTemplate.count({ where: { templateId } });
@@ -50,6 +53,9 @@ export async function unsaveTemplate(userId: string, templateId: string) {
           data: { saveCount: Math.max(0, template.saveCount - 1) },
         });
       }
+      await tx.engagementEvent.create({
+        data: { templateId, userId, eventType: 'SAVE', metadata: { saved: false } },
+      });
     }
     const count = await tx.savedTemplate.count({ where: { templateId } });
     return { saved: false, count };

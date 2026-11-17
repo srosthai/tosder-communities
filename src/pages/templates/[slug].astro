@@ -2,18 +2,19 @@
 import { ArrowLeft, ArrowRight, Clock, Download, MapPin, Share2, Wallet } from '@lucide/astro';
 import PublicLayout from '../../layouts/PublicLayout.astro';
 import PublicButton from '../../components/public/PublicButton.astro';
+import LikeButton from '../../components/public/LikeButton.astro';
 import SaveButton from '../../components/public/SaveButton.astro';
 import TemplateCard from '../../components/public/TemplateCard.astro';
 import MapView from '../../components/public/MapView.astro';
 import Badge from '../../components/ui/Badge.astro';
 import { getSessionUser } from '../../lib/auth-user';
 import { requestOrigin } from '../../lib/request-origin';
+import { getTemplateLikeState, recordView } from '../../lib/engagement';
 import { getTemplateSaveState } from '../../lib/saves';
 import { getTemplateReviewSummary } from '../../lib/reviews';
 import {
   getPublishedTemplateBySlug,
   listRelatedTemplates,
-  recordTemplateView,
 } from '../../lib/public-templates';
 
 export const prerender = false;
@@ -25,14 +26,28 @@ if (!template) {
   Astro.response.status = 404;
 }
 
+let visitorId = Astro.cookies.get('tosder_visitor')?.value;
+if (!visitorId) {
+  visitorId = crypto.randomUUID();
+  Astro.cookies.set('tosder_visitor', visitorId, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 365,
+  });
+}
+
 if (template) {
-  void recordTemplateView(template.id);
+  void recordView({ templateId: template.id, visitorId });
 }
 
 const user = await getSessionUser(Astro);
 const saveState = template
   ? await getTemplateSaveState(user?.id ?? null, template.id)
   : { saved: false, count: 0 };
+const likeState = template
+  ? await getTemplateLikeState(user?.id ?? null, template.id)
+  : { liked: false, count: 0 };
 
 const reviewSummary = template
   ? await getTemplateReviewSummary(template.id)
@@ -173,6 +188,13 @@ const jsonLd =
                 id={template.id}
                 saved={saveState.saved}
                 count={saveState.count}
+                signedIn={Boolean(user)}
+                redirectTo={`/templates/${template.slug}`}
+              />
+              <LikeButton
+                id={template.id}
+                liked={likeState.liked}
+                count={likeState.count}
                 signedIn={Boolean(user)}
                 redirectTo={`/templates/${template.slug}`}
               />

@@ -62,6 +62,19 @@ test.afterAll(async () => {
     await prisma.userTrip.deleteMany({ where: { id: { in: tripIds } } });
   }
   await prisma.memberProfile.deleteMany({ where: { username: { startsWith: 'review-other' } } });
+  const seed = await prisma.travelTemplate.findFirst({
+    where: { slug: 'kampot-slow-weekend' },
+    select: { id: true },
+  });
+  if (seed) {
+    const qualified = await prisma.usageEvent.count({
+      where: { templateId: seed.id, status: 'QUALIFIED' },
+    });
+    await prisma.travelTemplate.update({
+      where: { id: seed.id },
+      data: { qualifiedUseCount: qualified },
+    });
+  }
   await prisma.$disconnect();
 });
 

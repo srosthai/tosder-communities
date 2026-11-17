@@ -117,16 +117,6 @@ export async function getPublishedTemplateBySlug(
   };
 }
 
-export async function recordTemplateView(id: string) {
-  try {
-    await getPrisma().travelTemplate.update({
-      where: { id },
-      data: { viewCount: { increment: 1 } },
-    });
-  } catch {
-    // A view counter must never break the page.
-  }
-}
 
 export interface PublishedTemplateListParams {
   page?: number;

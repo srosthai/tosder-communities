@@ -6,6 +6,7 @@ import Input from '../../components/ui/Input.astro';
 import { getPrisma } from '../../db/prisma';
 import { ApiError } from '../../lib/api';
 import { getSessionUser } from '../../lib/auth-user';
+import { recordUseStarted } from '../../lib/engagement';
 import { ensureMemberProfile } from '../../lib/profiles';
 import { copyTemplateToTrip } from '../../lib/trips';
 import type { TemplateSnapshot } from '../../lib/template-publishing';
@@ -50,6 +51,15 @@ defaultStart.setUTCDate(defaultStart.getUTCDate() + 14);
 const defaultEnd = new Date(defaultStart);
 defaultEnd.setUTCDate(defaultEnd.getUTCDate() + Math.max(duration - 1, 0));
 const iso = (date: Date) => date.toISOString().slice(0, 10);
+
+if (template?.publishedVersionId) {
+  void recordUseStarted({
+    templateId: template.id,
+    versionId: template.publishedVersionId,
+    userId: user.id,
+    requestId: null,
+  });
+}
 
 let errorMessage: string | null = null;
 const idempotencyKey = crypto.randomUUID();

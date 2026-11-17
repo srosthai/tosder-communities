@@ -142,6 +142,7 @@ const statusFilters = [
 >
   <div slot="actions" class="header-actions">
     <span class="profile-handle">@{profile.username}</span>
+    <a class="analytics-link" href="/creator/analytics">Analytics</a>
     <form method="post" data-async-action>
       <input type="hidden" name="intent" value="create" />
       <button class="primary-action" type="submit">
@@ -474,6 +475,13 @@ const statusFilters = [
     color: var(--color-text-subtle);
     font-family: var(--font-mono);
     font-size: var(--text-xs);
+  }
+
+  .analytics-link {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .primary-action,
