@@ -10,10 +10,10 @@ test.describe.serial('destinations API', () => {
 
     const body = await response.json();
     expect(body.meta).toMatchObject({
-      total: 10,
+      total: 43,
       page: 1,
       pageSize: 6,
-      totalPages: 2,
+      totalPages: 8,
     });
     expect(body.data).toHaveLength(6);
     expect(body.data[0]).toMatchObject({
@@ -46,7 +46,7 @@ test.describe.serial('destinations API', () => {
 
     const province = await request.get('/api/destinations?province=kampot');
     expect(province.status()).toBe(200);
-    expect((await province.json()).meta.total).toBe(2);
+    expect((await province.json()).meta.total).toBe(4);
   });
 
   test('returns a destination detail or a clean 404', async ({ request }) => {

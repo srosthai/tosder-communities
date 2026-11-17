@@ -6,16 +6,16 @@ test.describe('admin data table', () => {
 
     const rows = page.locator('tbody tr:visible');
     await expect(rows).toHaveCount(5);
-    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 2');
-    await expect(page.locator('[data-datatable-range]')).toHaveText('1–5 of 10');
+    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 9');
+    await expect(page.locator('[data-datatable-range]')).toHaveText('1–5 of 43');
 
     await page.getByRole('button', { name: 'Next page' }).click();
-    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 2 of 2');
+    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 2 of 9');
     await expect(rows).toHaveCount(5);
-    await expect(page.locator('[data-datatable-range]')).toHaveText('6–10 of 10');
+    await expect(page.locator('[data-datatable-range]')).toHaveText('6–10 of 43');
 
     await page.getByRole('button', { name: 'First page' }).click();
-    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 2');
+    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 9');
   });
 
   test('searches, filters, and recovers from an empty result', async ({ page }) => {
@@ -39,7 +39,7 @@ test.describe('admin data table', () => {
     await page.getByRole('checkbox', { name: 'Published' }).check();
     await expect(rows).toHaveCount(5);
     await expect(page.locator('[data-datatable-filter-count]')).toHaveText('1');
-    await expect(page.locator('[data-datatable-range]')).toHaveText('1–5 of 10');
+    await expect(page.locator('[data-datatable-range]')).toHaveText('1–5 of 43');
 
     await page.getByRole('button', { name: 'Clear filters' }).click();
     await expect(rows).toHaveCount(5);
@@ -59,8 +59,8 @@ test.describe('admin data table', () => {
 
     await page.getByRole('option', { name: 'Kampot' }).click();
     await expect(page.getByRole('button', { name: /Kampot/ })).toBeVisible();
-    await expect(page.locator('tbody tr:visible')).toHaveCount(2);
-    await expect(page.locator('[data-datatable-range]')).toHaveText('1–2 of 2');
+    await expect(page.locator('tbody tr:visible')).toHaveCount(4);
+    await expect(page.locator('[data-datatable-range]')).toHaveText('1–4 of 4');
 
     await page.getByRole('button', { name: /Kampot/ }).click();
     await page.getByRole('option', { name: 'All provinces' }).click();
@@ -82,7 +82,7 @@ test.describe('admin data table', () => {
     await page.keyboard.press('Enter');
 
     await expect(page.getByRole('button', { name: /Kep/ })).toBeVisible();
-    await expect(page.locator('tbody tr:visible')).toHaveCount(1);
+    await expect(page.locator('tbody tr:visible')).toHaveCount(3);
   });
 
   test('keeps eight columns readable at 1280px', async ({ page }) => {
@@ -99,7 +99,7 @@ test.describe('admin data table', () => {
 
     await page.locator('[data-datatable-page-size]').selectOption('10');
     await expect(page.locator('tbody tr:visible')).toHaveCount(10);
-    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 1');
-    await expect(page.locator('[data-datatable-range]')).toHaveText('1–10 of 10');
+    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 5');
+    await expect(page.locator('[data-datatable-range]')).toHaveText('1–10 of 43');
   });
 });

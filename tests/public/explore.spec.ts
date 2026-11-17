@@ -7,13 +7,13 @@ test.describe('explore', () => {
 
     await expect(page.getByRole('heading', { name: 'Find a place worth the detour.' })).toBeVisible();
     await expect(page.locator('.destination-card')).toHaveCount(6);
-    await expect(page.getByText('10 places')).toBeVisible();
-    await expect(page.getByText('Page 1 of 2')).toBeVisible();
+    await expect(page.getByText('43 places')).toBeVisible();
+    await expect(page.getByText('Page 1 of 8')).toBeVisible();
 
     await page.getByRole('link', { name: 'Next page' }).click();
     await expect(page).toHaveURL(/page=2/);
-    await expect(page.locator('.destination-card')).toHaveCount(4);
-    await expect(page.getByText('Page 2 of 2')).toBeVisible();
+    await expect(page.locator('.destination-card')).toHaveCount(6);
+    await expect(page.getByText('Page 2 of 8')).toBeVisible();
   });
 
   test('searches and keeps the query in the URL', async ({ page }) => {
@@ -34,7 +34,7 @@ test.describe('explore', () => {
     await page.getByLabel('Filter by province').selectOption('kampot');
     await expect(page).toHaveURL(/province=kampot/);
     await expect(page.locator('.destination-card', { hasText: 'Bokor Mountain' })).toBeVisible();
-    await expect(page.locator('.destination-card')).toHaveCount(2);
+    await expect(page.locator('.destination-card')).toHaveCount(4);
 
     await page.getByRole('link', { name: 'Clear' }).click();
     await expect(page).toHaveURL(/\/explore$/);
@@ -44,7 +44,7 @@ test.describe('explore', () => {
     await page.getByLabel('Filter by category').selectOption('food');
     await expect(page).toHaveURL(/category=food/);
     await expect(page.locator('.destination-card', { hasText: 'Kep crab market' })).toBeVisible();
-    await expect(page.locator('.destination-card')).toHaveCount(2);
+    await expect(page.locator('.destination-card')).toHaveCount(5);
   });
 
   test('shows an empty state and clears filters', async ({ page }) => {

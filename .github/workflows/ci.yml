@@ -61,6 +61,9 @@ jobs:
       - name: Verify geography and spatial queries
         run: npm run db:check
 
+      - name: Verify destination content completeness
+        run: npm run db:content-check
+
       - name: Type and Astro checks
         run: npm run check
 
