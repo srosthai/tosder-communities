@@ -1,0 +1,83 @@
+---
+import PublicPage from '../../components/public/PublicPage.astro';
+---
+
+<PublicPage
+  label="Legal"
+  title="Privacy policy"
+  description="What Tosder Communities collects, why we collect it, and the choices you have."
+>
+  <article class="prose">
+    <p class="updated">Last updated: November 17, 2026</p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li>Account details from Neon Auth: email address, display name, and session data.</li>
+      <li>Your creator profile: username, bio, avatar, and optional social links.</li>
+      <li>Content you create: templates, trips, days, items, checklist entries, reviews, saves, and likes.</li>
+      <li>Usage records needed to calculate qualified uses, moderate content, pay rewards, and keep an audit trail.</li>
+      <li>An opaque visitor cookie used to deduplicate template views. Only a hash is stored with the view event; raw IP addresses are not stored for views.</li>
+    </ul>
+
+    <h2>How we use it</h2>
+    <ul>
+      <li>Provide sign-in, planning tools, creator publishing, and public discovery.</li>
+      <li>Calculate qualified uses and competition rankings from the usage ledger.</li>
+      <li>Moderate reports, protect members, and prevent abuse.</li>
+      <li>Produce aggregate creator analytics without exposing traveler identities.</li>
+      <li>Meet legal, tax, and payout obligations for rewards.</li>
+    </ul>
+
+    <h2>What we share</h2>
+    <p>
+      We use infrastructure providers for hosting, database, authentication, and email delivery. We do
+      not sell personal data. Public pages show creator profiles, templates, aggregate counts, and
+      reviews; they never show private trips or traveler contact details.
+    </p>
+
+    <h2>Retention</h2>
+    <ul>
+      <li>Account and planning data is kept while your account is active.</li>
+      <li>Usage and audit events are kept for competition integrity and dispute resolution; privileged audit events are retained for up to 7 years.</li>
+      <li>Deleted trips remove their itinerary and source attribution. Audit records may remain for integrity.</li>
+      <li>Backups are retained for a limited operational window.</li>
+    </ul>
+
+    <h2>Cookies and local storage</h2>
+    <p>
+      Essential cookies keep you signed in and deduplicate views. Theme preference is stored in local
+      storage. We do not use advertising cookies or third-party ad trackers.
+    </p>
+
+    <h2>Your choices</h2>
+    <p>
+      You can edit your profile and content, delete trips, archive templates, and request account
+      deletion or an export. Contact us to exercise access, correction, or deletion rights. Some records
+      may be retained where required for legal, fraud-prevention, or payout reconciliation purposes.
+    </p>
+
+    <h2>Children</h2>
+    <p>The service is intended for adults. Do not create an account if you are under 18.</p>
+
+    <h2>Contact</h2>
+    <p>
+      Privacy questions: <a href="mailto:privacy@tosder.com">privacy@tosder.com</a>. Replace this address
+      with the monitored launch address before public launch.
+    </p>
+
+    <p class="note">
+      This policy is an operational draft. Legal counsel must review it before public launch.
+    </p>
+  </article>
+</PublicPage>
+
+<style>
+  .prose { max-width: 68ch; }
+  .updated, .note { color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .note { margin-top: var(--space-5); padding-top: var(--space-3); border-top: var(--border-width) solid var(--color-border); }
+  h2 { margin: var(--space-5) 0 var(--space-2); font-size: var(--text-lg); font-weight: var(--weight-semibold); }
+  p, li { color: var(--color-text-muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+  ul { margin: 0; padding-left: var(--space-5); }
+  li { margin-bottom: var(--space-1); }
+  a { color: var(--color-text); text-decoration: underline; text-underline-offset: 2px; }
+</style>

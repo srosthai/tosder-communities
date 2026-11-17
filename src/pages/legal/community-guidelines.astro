@@ -1,0 +1,61 @@
+---
+import PublicPage from '../../components/public/PublicPage.astro';
+---
+
+<PublicPage
+  label="Community"
+  title="Community guidelines"
+  description="How we keep itineraries useful, respectful, and trustworthy."
+>
+  <article class="prose">
+    <h2>Be useful, not promotional</h2>
+    <p>
+      Share the route you actually took. Explain timing, costs, and the parts that did not work. Do not
+      use templates as an advert for a business or paste copied listicles.
+    </p>
+
+    <h2>Respect people and places</h2>
+    <p>
+      Ask before photographing people. Do not publish private information, exact home locations, or
+      content that exposes vulnerable communities. Respect temples, homes, and protected areas.
+    </p>
+
+    <h2>Use licensed photos</h2>
+    <p>
+      Every photo needs a source, licence, credit, and meaningful alt text. Do not upload an image you
+      found on another site unless you have permission.
+    </p>
+
+    <h2>Keep advice accurate</h2>
+    <p>
+      Flag uncertainty instead of presenting opening hours, prices, or safety conditions as fact. Update
+      your template when you learn something important has changed.
+    </p>
+
+    <h2>No manipulation</h2>
+    <p>
+      Do not coordinate fake views, likes, saves, reviews, or qualified uses. Do not copy your own
+      template through duplicate accounts. Competition manipulation is a suspension offence.
+    </p>
+
+    <h2>Moderation and appeals</h2>
+    <p>
+      Reports are private. Moderators may hide content, warn members, or suspend accounts. You will see
+      a notification when a decision affects you. Ask for an administrator review if you believe a
+      decision is wrong.
+    </p>
+
+    <h2>Report a problem</h2>
+    <p>
+      Use the Report link on a template, review, or profile. If the report concerns an urgent safety
+      issue, contact <a href="mailto:safety@tosder.com">safety@tosder.com</a>.
+    </p>
+  </article>
+</PublicPage>
+
+<style>
+  .prose { max-width: 68ch; }
+  h2 { margin: var(--space-5) 0 var(--space-2); font-size: var(--text-lg); font-weight: var(--weight-semibold); }
+  p { color: var(--color-text-muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+  a { color: var(--color-text); text-decoration: underline; text-underline-offset: 2px; }
+</style>

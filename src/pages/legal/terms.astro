@@ -1,0 +1,95 @@
+---
+import PublicPage from '../../components/public/PublicPage.astro';
+---
+
+<PublicPage
+  label="Legal"
+  title="Terms of service"
+  description="The rules for using Tosder Communities, publishing templates, and taking part in competitions."
+>
+  <article class="prose">
+    <p class="updated">Last updated: November 17, 2026</p>
+
+    <h2>The service</h2>
+    <p>
+      Tosder Communities helps travelers discover Cambodia, copy published itineraries into private
+      trips, and share reusable templates. We may change or stop features, but we will not silently
+      rewrite a finalized competition result.
+    </p>
+
+    <h2>Accounts</h2>
+    <ul>
+      <li>You must be 18 or older and provide accurate account information.</li>
+      <li>You are responsible for keeping your password and sessions secure.</li>
+      <li>Do not share an account or impersonate another person.</li>
+      <li>We may suspend accounts that violate these terms or the community guidelines.</li>
+    </ul>
+
+    <h2>Your content</h2>
+    <p>
+      You keep ownership of the text, photos, and itineraries you create. You grant Tosder Communities
+      a non-exclusive licence to host, display, copy into traveler trips, and promote that content on
+      the service. You confirm you have the rights to every photo and that credits are accurate.
+    </p>
+    <p>
+      Published templates become immutable versions. Travelers who copy a version keep that copy even
+      if you later edit or archive the template. You cannot revoke a version from trips that already
+      copied it, except through moderation or account deletion processes.
+    </p>
+
+    <h2>Acceptable use</h2>
+    <ul>
+      <li>No harassment, hate, threats, spam, or illegal content.</li>
+      <li>No unlicensed photos, copied descriptions, or misleading safety advice.</li>
+      <li>No attempts to inflate views, likes, saves, qualified uses, or competition rankings.</li>
+      <li>No scraping, credential attacks, or interference with the service.</li>
+    </ul>
+
+    <h2>Competitions and rewards</h2>
+    <p>
+      Competition rules and prize details are published on the competition page before the period
+      starts. Qualified uses are calculated from the server-side ledger. Ties follow the published
+      rule. Rewards require a finalized result, administrator approval, and a recorded manual payout.
+      No money moves automatically. Voided or corrected results are audited.
+    </p>
+
+    <h2>Moderation</h2>
+    <p>
+      Moderators may hide templates or reviews, warn members, or suspend accounts for violations.
+      Decisions are recorded in the audit log and affected members receive an in-app notification.
+      Appeals may be escalated to an administrator.
+    </p>
+
+    <h2>Disclaimers</h2>
+    <p>
+      Travel information can change. Verify opening hours, transport, safety, and prices independently.
+      The service is provided as-is to the extent permitted by law. Nothing here is legal, medical, or
+      safety advice.
+    </p>
+
+    <h2>Termination</h2>
+    <p>
+      You may stop using the service at any time. We may suspend or terminate access for violations,
+      fraud, or legal requirements. Provisions about content licences, audit records, and liability
+      survive termination.
+    </p>
+
+    <h2>Contact</h2>
+    <p>Questions: <a href="mailto:hello@tosder.com">hello@tosder.com</a>.</p>
+
+    <p class="note">
+      These terms are an operational draft. Legal counsel must review them before public launch.
+    </p>
+  </article>
+</PublicPage>
+
+<style>
+  .prose { max-width: 68ch; }
+  .updated, .note { color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .note { margin-top: var(--space-5); padding-top: var(--space-3); border-top: var(--border-width) solid var(--color-border); }
+  h2 { margin: var(--space-5) 0 var(--space-2); font-size: var(--text-lg); font-weight: var(--weight-semibold); }
+  p, li { color: var(--color-text-muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+  ul { margin: 0; padding-left: var(--space-5); }
+  li { margin-bottom: var(--space-1); }
+  a { color: var(--color-text); text-decoration: underline; text-underline-offset: 2px; }
+</style>
