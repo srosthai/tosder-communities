@@ -2,7 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { expect, test } from '@playwright/test';
 import { config } from 'dotenv';
-import { ensureAdmin } from '../helpers/auth';
+import { adminPassword, ensureAdmin } from '../helpers/auth';
 
 config({ path: '.env.local' });
 
@@ -183,8 +183,8 @@ test.describe.serial('saved items', () => {
     await other.goto('/sign-up');
     await other.getByLabel('Display name').fill(`Save Other ${Date.now()}`);
     await other.getByLabel('Email address').fill(`save-other-${Date.now()}@example.com`);
-    await other.getByLabel('Password', { exact: true }).fill('AdminTest123!');
-    await other.getByLabel('Confirm password').fill('AdminTest123!');
+    await other.getByLabel('Password', { exact: true }).fill(adminPassword);
+    await other.getByLabel('Confirm password').fill(adminPassword);
     await other.getByRole('button', { name: 'Create account' }).click();
     await expect(other).toHaveURL(/\/account$/);
     await other.goto('/saved');

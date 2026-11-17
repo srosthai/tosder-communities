@@ -1,10 +1,13 @@
 import { defineConfig, envField } from 'astro/config';
 import node from '@astrojs/node';
+import vercel from '@astrojs/vercel';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   output: 'server',
-  adapter: node({ mode: 'standalone' }),
+  // The Node standalone adapter powers local production, Playwright, and CI.
+  // Vercel needs its own adapter so the build emits the Build Output API.
+  adapter: process.env.VERCEL ? vercel() : node({ mode: 'standalone' }),
   env: {
     schema: {
       DATABASE_URL: envField.string({
