@@ -29,6 +29,7 @@ export interface DestinationSummary extends DestinationCardData {
 }
 
 export interface DestinationDetail extends DestinationSummary {
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   description: string | null;
   practicalTips: string | null;
   photos: Array<{ url: string; alt: string; credit: string | null }>;
@@ -107,10 +108,16 @@ export async function listDestinations(params: DestinationListParams = {}) {
   return { destinations, total, page, pageSize, totalPages };
 }
 
-export async function getDestinationBySlug(slug: string): Promise<DestinationDetail | null> {
+export async function getDestinationBySlug(
+  slug: string,
+  options: { includeUnpublished?: boolean } = {},
+): Promise<DestinationDetail | null> {
   const prisma = getPrisma();
   const destination = await prisma.destination.findFirst({
-    where: { slug, status: 'PUBLISHED' },
+    where: {
+      slug,
+      ...(options.includeUnpublished ? {} : { status: 'PUBLISHED' }),
+    },
     include: {
       province: { select: { name: true } },
       photos: { orderBy: { sortOrder: 'asc' } },
@@ -130,6 +137,7 @@ export async function getDestinationBySlug(slug: string): Promise<DestinationDet
     category: destination.categories[0]?.category.name ?? null,
     image: destination.coverPhotoUrl ?? destination.photos[0]?.url ?? imageFallback,
     alt: destination.photos[0]?.alt ?? destination.name,
+    status: destination.status,
     description: destination.description,
     practicalTips: destination.practicalTips,
     latitude: destination.latitude,

@@ -22,7 +22,7 @@
     "lighthouse": "lhci autorun",
     "db:seed": "node prisma/seed.mjs",
     "db:check": "node scripts/check-geography.mjs",
-    "test:auth": "AUTH_E2E=true playwright test tests/auth",
+    "test:auth": "AUTH_E2E=true playwright test tests/auth tests/admin/content-editor.spec.ts",
     "db:deploy": "prisma migrate deploy"
   },
   "dependencies": {

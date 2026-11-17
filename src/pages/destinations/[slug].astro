@@ -5,16 +5,20 @@ import PublicButton from '../../components/public/PublicButton.astro';
 import DestinationCard from '../../components/public/DestinationCard.astro';
 import MapView from '../../components/public/MapView.astro';
 import EmptyState from '../../components/ui/EmptyState.astro';
+import { getContentAdmin } from '../../lib/admin-auth';
 import { getDestinationBySlug, listRelatedDestinations } from '../../lib/destinations';
 
 export const prerender = false;
 
 const slug = Astro.params.slug ?? '';
-const destination = await getDestinationBySlug(slug);
+const { allowed: canPreview } = await getContentAdmin(Astro);
+const destination = await getDestinationBySlug(slug, { includeUnpublished: canPreview });
 
 if (!destination) {
   Astro.response.status = 404;
 }
+
+const isPreview = Boolean(destination && destination.status !== 'PUBLISHED');
 
 const related = destination
   ? await listRelatedDestinations(destination.id, destination.province, 3)
@@ -30,7 +34,7 @@ const coords =
     : null;
 
 const canonicalPath = destination ? `/destinations/${destination.slug}` : undefined;
-const destinationJsonLd = destination
+const destinationJsonLd = destination && !isPreview
   ? {
       '@context': 'https://schema.org',
       '@type': 'TouristAttraction',
@@ -60,14 +64,23 @@ const destinationJsonLd = destination
   <PublicLayout
     title={`${destination.name} — Tosder Communities`}
     description={destination.summary ?? `Discover ${destination.name} in ${destination.province}, Cambodia.`}
-    canonical={canonicalPath}
+    canonical={isPreview ? undefined : canonicalPath}
     image="/image/og-default.png"
     imageAlt={`${destination.name}, ${destination.province}, Cambodia`}
     type="article"
     jsonLd={destinationJsonLd}
+    noindex={isPreview}
   >
     <article class="destination-page">
       <div class="container">
+        {isPreview && (
+          <div class="preview-banner" role="status">
+            <span>
+              Preview · {destination.status === 'DRAFT' ? 'Draft' : 'Archived'} — not visible to the public
+            </span>
+            <a href={`/admin/content/${destination.id}`}>Back to editor</a>
+          </div>
+        )}
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <a href="/">Home</a>
           <span aria-hidden="true">/</span>
@@ -199,6 +212,27 @@ const destinationJsonLd = destination
   .destination-page,
   .not-found {
     padding: clamp(var(--space-8), 8vw, 5rem) 0;
+  }
+
+  .preview-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+    padding: var(--space-2) var(--space-4);
+    border: var(--border-width) solid color-mix(in oklch, var(--color-warning) 40%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+    font-size: var(--text-sm);
+  }
+
+  .preview-banner a {
+    color: inherit;
+    font-weight: var(--weight-medium);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .breadcrumbs {

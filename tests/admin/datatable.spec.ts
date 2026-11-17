@@ -5,14 +5,14 @@ test.describe('admin data table', () => {
     await page.goto('/admin/content');
 
     const rows = page.locator('tbody tr:visible');
-    await expect(rows).toHaveCount(10);
+    await expect(rows).toHaveCount(5);
     await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 2');
-    await expect(page.locator('[data-datatable-range]')).toHaveText('1–10 of 12');
+    await expect(page.locator('[data-datatable-range]')).toHaveText('1–5 of 10');
 
     await page.getByRole('button', { name: 'Next page' }).click();
     await expect(page.locator('[data-datatable-page]')).toHaveText('Page 2 of 2');
-    await expect(rows).toHaveCount(2);
-    await expect(page.locator('[data-datatable-range]')).toHaveText('11–12 of 12');
+    await expect(rows).toHaveCount(5);
+    await expect(page.locator('[data-datatable-range]')).toHaveText('6–10 of 10');
 
     await page.getByRole('button', { name: 'First page' }).click();
     await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 2');
@@ -33,15 +33,16 @@ test.describe('admin data table', () => {
     await expect(page.locator('[data-datatable-empty]')).toBeVisible();
 
     await search.fill('');
-    await expect(rows).toHaveCount(10);
+    await expect(rows).toHaveCount(5);
 
     await page.getByRole('button', { name: 'Filter' }).click();
-    await page.getByRole('checkbox', { name: 'Draft' }).check();
-    await expect(rows).toHaveCount(2);
+    await page.getByRole('checkbox', { name: 'Published' }).check();
+    await expect(rows).toHaveCount(5);
     await expect(page.locator('[data-datatable-filter-count]')).toHaveText('1');
+    await expect(page.locator('[data-datatable-range]')).toHaveText('1–5 of 10');
 
     await page.getByRole('button', { name: 'Clear filters' }).click();
-    await expect(rows).toHaveCount(10);
+    await expect(rows).toHaveCount(5);
   });
 
   test('searches and selects a province in the dropdown', async ({ page }) => {
@@ -63,7 +64,7 @@ test.describe('admin data table', () => {
 
     await page.getByRole('button', { name: /Kampot/ }).click();
     await page.getByRole('option', { name: 'All provinces' }).click();
-    await expect(page.locator('tbody tr:visible')).toHaveCount(10);
+    await expect(page.locator('tbody tr:visible')).toHaveCount(5);
   });
 
   test('supports keyboard selection in the searchable dropdown', async ({ page }) => {
@@ -96,9 +97,9 @@ test.describe('admin data table', () => {
   test('changes rows per page', async ({ page }) => {
     await page.goto('/admin/content');
 
-    await page.locator('[data-datatable-page-size]').selectOption('5');
-    await expect(page.locator('tbody tr:visible')).toHaveCount(5);
-    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 3');
-    await expect(page.locator('[data-datatable-range]')).toHaveText('1–5 of 12');
+    await page.locator('[data-datatable-page-size]').selectOption('10');
+    await expect(page.locator('tbody tr:visible')).toHaveCount(10);
+    await expect(page.locator('[data-datatable-page]')).toHaveText('Page 1 of 1');
+    await expect(page.locator('[data-datatable-range]')).toHaveText('1–10 of 10');
   });
 });

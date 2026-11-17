@@ -1,0 +1,322 @@
+---
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PageHeader from '../../../components/admin/PageHeader.astro';
+import DestinationEditor from '../../../components/admin/DestinationEditor.astro';
+import { getPrisma } from '../../../db/prisma';
+import { getContentAdmin } from '../../../lib/admin-auth';
+import { auditData, formatValidationError, parseDestinationForm } from '../../../lib/admin-content';
+
+export const prerender = false;
+
+const id = Astro.params.id ?? '';
+const idValid = z.uuid().safeParse(id).success;
+const { user, allowed } = await getContentAdmin(Astro);
+
+if (!user) {
+  return Astro.redirect(
+    `/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`,
+  );
+}
+
+const prisma = allowed ? getPrisma() : null;
+const destination = prisma && idValid
+  ? await prisma.destination.findUnique({
+      where: { id },
+      include: {
+        photos: { orderBy: { sortOrder: 'asc' } },
+        categories: { select: { categoryId: true } },
+        tags: { select: { tagId: true } },
+      },
+    })
+  : null;
+
+const [provinces, categories, tags] = prisma
+  ? await Promise.all([
+      prisma.province.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+      prisma.category.findMany({ orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
+      prisma.tag.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    ])
+  : [[], [], []];
+
+let errorMessage: string | null = null;
+
+if (allowed && destination && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const parsed = parseDestinationForm(form);
+
+  if (!parsed.success) {
+    errorMessage = formatValidationError(parsed.error);
+  } else {
+    try {
+      await prisma!.$transaction(async (tx) => {
+        await tx.destination.update({
+          where: { id: destination.id },
+          data: {
+            name: parsed.data.name,
+            slug: parsed.data.slug,
+            provinceId: parsed.data.provinceId,
+            summary: parsed.data.summary || null,
+            description: parsed.data.description || null,
+            practicalTips: parsed.data.practicalTips || null,
+            latitude: parsed.data.latitude ?? null,
+            longitude: parsed.data.longitude ?? null,
+            status: parsed.data.status,
+            coverPhotoUrl: parsed.data.coverPhotoUrl || parsed.data.photos[0]?.url || null,
+          },
+        });
+
+        await tx.destinationCategory.deleteMany({ where: { destinationId: destination.id } });
+        if (parsed.data.categoryIds.length > 0) {
+          await tx.destinationCategory.createMany({
+            data: parsed.data.categoryIds.map((categoryId) => ({
+              destinationId: destination.id,
+              categoryId,
+            })),
+          });
+        }
+
+        await tx.destinationTag.deleteMany({ where: { destinationId: destination.id } });
+        if (parsed.data.tagIds.length > 0) {
+          await tx.destinationTag.createMany({
+            data: parsed.data.tagIds.map((tagId) => ({
+              destinationId: destination.id,
+              tagId,
+            })),
+          });
+        }
+
+        await tx.destinationPhoto.deleteMany({ where: { destinationId: destination.id } });
+        if (parsed.data.photos.length > 0) {
+          await tx.destinationPhoto.createMany({
+            data: parsed.data.photos.map((photo, index) => ({
+              destinationId: destination.id,
+              url: photo.url,
+              alt: photo.alt,
+              credit: photo.credit,
+              sortOrder: index,
+            })),
+          });
+        }
+
+        const statusChanged = parsed.data.status !== destination.status;
+        await tx.auditEvent.create({
+          data: auditData(
+            { id: user.id, email: user.email },
+            statusChanged ? 'destination.status_changed' : 'destination.updated',
+            destination.id,
+            statusChanged
+              ? `Changed ${destination.name} to ${parsed.data.status.toLowerCase()}`
+              : `Updated ${destination.name}`,
+            {
+              slug: parsed.data.slug,
+              previousStatus: destination.status,
+              status: parsed.data.status,
+            },
+          ),
+        });
+      });
+
+      return Astro.redirect(`/admin/content/${destination.id}?saved=1`);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        errorMessage = 'That slug is already in use. Choose another.';
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+
+const saved = Astro.url.searchParams.get('saved') === '1';
+const auditEvents = prisma && destination
+  ? await prisma.auditEvent.findMany({
+      where: { entityType: 'destination', entityId: destination.id },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        summary: true,
+        actorEmail: true,
+        action: true,
+        createdAt: true,
+      },
+    })
+  : [];
+const editorDestination = destination
+  ? {
+      id: destination.id,
+      name: destination.name,
+      slug: destination.slug,
+      provinceId: destination.provinceId,
+      summary: destination.summary,
+      description: destination.description,
+      practicalTips: destination.practicalTips,
+      latitude: destination.latitude,
+      longitude: destination.longitude,
+      status: destination.status,
+      coverPhotoUrl: destination.coverPhotoUrl,
+      categoryIds: destination.categories.map((item) => item.categoryId),
+      tagIds: destination.tags.map((item) => item.tagId),
+      photos: destination.photos.map((photo) => ({
+        url: photo.url,
+        alt: photo.alt,
+        credit: photo.credit,
+      })),
+    }
+  : undefined;
+---
+
+<AdminLayout title={destination ? `Edit ${destination.name}` : 'Destination not found'}>
+  {destination ? (
+    <>
+      <PageHeader
+        title={destination.name}
+        description={`Edit the destination, classification, coordinates, and photos. Last updated ${destination.updatedAt.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}.`}
+      >
+        <a class="back-link" href="/admin/content">Back to content</a>
+      </PageHeader>
+
+      {allowed ? (
+        <DestinationEditor
+          mode="edit"
+          action={`/admin/content/${destination.id}`}
+          provinces={provinces}
+          categories={categories}
+          tags={tags}
+          destination={editorDestination}
+          errorMessage={errorMessage}
+          saved={saved}
+          publicUrl={`/destinations/${destination.slug}`}
+        />
+      ) : (
+        <p class="forbidden" role="alert">
+          Your account does not have content-admin access. Ask an administrator to add your email to the content-admin allowlist.
+        </p>
+      )}
+
+      {allowed && (
+        <section class="audit" aria-labelledby="audit-heading">
+          <div class="audit__header">
+            <h2 id="audit-heading">Activity</h2>
+            <span>Latest {auditEvents.length} changes</span>
+          </div>
+          {auditEvents.length > 0 ? (
+            <ol class="audit__list">
+              {auditEvents.map((event) => (
+                <li>
+                  <span class="audit__summary">{event.summary}</span>
+                  <span class="audit__meta">
+                    {event.actorEmail} ·{' '}
+                    <time datetime={event.createdAt.toISOString()}>
+                      {event.createdAt.toLocaleString('en', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </time>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p class="audit__empty">No changes recorded yet.</p>
+          )}
+        </section>
+      )}
+    </>
+  ) : (
+    <>
+      <PageHeader title="Destination not found" description="The destination does not exist or is no longer available." />
+      <a class="back-link" href="/admin/content">Back to content</a>
+    </>
+  )}
+</AdminLayout>
+
+<style>
+  :global(.back-link) {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  :global(.back-link:hover) {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .forbidden {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .audit {
+    margin-top: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .audit__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
+  }
+
+  .audit__header h2 {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .audit__header span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .audit__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .audit__list li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-2) 0;
+    border-top: var(--border-width) solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+
+  .audit__summary {
+    color: var(--color-text);
+  }
+
+  .audit__meta {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .audit__empty {
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+  }
+</style>

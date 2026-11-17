@@ -34,6 +34,7 @@ jobs:
       DIRECT_URL: postgresql://ci:ci@127.0.0.1:5432/ci
       NEON_AUTH_BASE_URL: https://example.invalid/neondb/auth
       NEON_AUTH_COOKIE_SECRET: ci-only-cookie-secret-at-least-32-characters
+      CONTENT_ADMIN_EMAILS: admin@example.com
 
     steps:
       - name: Checkout
