@@ -47,6 +47,13 @@ export const adminNavGroups: AdminNavGroup[] = [
         shortcut: 'G C',
       },
       {
+        label: 'Taxonomy',
+        href: '/admin/content/taxonomy',
+        icon: 'content',
+        roles: ['administrator', 'content-editor'],
+        shortcut: 'G X',
+      },
+      {
         label: 'Templates',
         href: '/admin/templates',
         icon: 'templates',
@@ -113,6 +120,7 @@ export const adminShortcuts = [
   { keys: ['?'], label: 'Show keyboard shortcuts' },
   { keys: ['G', 'O'], label: 'Go to Overview' },
   { keys: ['G', 'C'], label: 'Go to Content' },
+  { keys: ['G', 'X'], label: 'Go to Taxonomy' },
   { keys: ['G', 'T'], label: 'Go to Templates' },
   { keys: ['G', 'U'], label: 'Go to Users' },
   { keys: ['G', 'M'], label: 'Go to Moderation' },

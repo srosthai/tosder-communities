@@ -200,6 +200,19 @@ const previewLabel =
         hint="Optional. The first photo is used when this is empty."
         maxlength={600}
       />
+      <div class="uploader" data-media-uploader>
+        <div class="uploader__copy">
+          <strong>Upload a photo</strong>
+          <p>JPEG, PNG, WebP, or AVIF up to 8 MB. We strip metadata and create 480, 960, and 1600 px WebP variants.</p>
+        </div>
+        <div class="uploader__fields">
+          <label>Image<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" data-media-file /></label>
+          <label>Alt text<input type="text" maxlength="220" placeholder="Describe what is visible" data-media-alt /></label>
+          <label>Credit / rights<input type="text" maxlength="220" placeholder="Photographer, licence, source" data-media-credit /></label>
+          <button type="button" class="upload-button" data-media-upload>Upload and fill first empty photo</button>
+        </div>
+        <p class="uploader__status" data-media-status role="status"></p>
+      </div>
       <div class="photo-list" data-photo-list>
         {photos.map((photo, index) => (
           <fieldset class="photo-row" data-photo-row>
@@ -290,6 +303,73 @@ const previewLabel =
 
     relabel();
   });
+
+  document.querySelectorAll<HTMLElement>('[data-media-uploader]').forEach((uploader) => {
+    const fileInput = uploader.querySelector<HTMLInputElement>('[data-media-file]');
+    const altInput = uploader.querySelector<HTMLInputElement>('[data-media-alt]');
+    const creditInput = uploader.querySelector<HTMLInputElement>('[data-media-credit]');
+    const status = uploader.querySelector<HTMLElement>('[data-media-status]');
+    const button = uploader.querySelector<HTMLButtonElement>('[data-media-upload]');
+    const list = document.querySelector<HTMLElement>('[data-photo-list]');
+
+    button?.addEventListener('click', async () => {
+      const file = fileInput?.files?.[0];
+      const alt = altInput?.value.trim() ?? '';
+      if (!file) {
+        if (status) status.textContent = 'Choose an image first.';
+        return;
+      }
+      if (!alt) {
+        if (status) status.textContent = 'Add alt text before uploading.';
+        altInput?.focus();
+        return;
+      }
+
+      const form = new FormData();
+      form.set('file', file);
+      form.set('alt', alt);
+      if (creditInput?.value.trim()) form.set('credit', creditInput.value.trim());
+
+      button.disabled = true;
+      if (status) status.textContent = 'Uploading and generating variants…';
+      try {
+        const response = await fetch('/api/admin/media', {
+          method: 'POST',
+          body: form,
+          credentials: 'same-origin',
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error?.message ?? 'The image could not be uploaded.');
+        }
+        const url = payload?.data?.url as string | undefined;
+        if (!url || !list) throw new Error('The upload response was incomplete.');
+
+        const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-photo-row]'));
+        const row =
+          rows.find((candidate) => !candidate.querySelector<HTMLInputElement>('input[name="photoUrl"]')?.value) ??
+          rows[rows.length - 1];
+        const urlInput = row?.querySelector<HTMLInputElement>('input[name="photoUrl"]');
+        const rowAlt = row?.querySelector<HTMLInputElement>('input[name="photoAlt"]');
+        const rowCredit = row?.querySelector<HTMLInputElement>('input[name="photoCredit"]');
+        if (!row || !urlInput || !rowAlt) throw new Error('No photo row is available.');
+
+        urlInput.value = url;
+        rowAlt.value = alt;
+        if (rowCredit) rowCredit.value = creditInput?.value.trim() ?? '';
+        if (status) status.textContent = 'Uploaded. Review the URL, alt text, and credit before saving.';
+        fileInput.value = '';
+        if (altInput) altInput.value = '';
+        if (creditInput) creditInput.value = '';
+      } catch (error) {
+        if (status) {
+          status.textContent = error instanceof Error ? error.message : 'The image could not be uploaded.';
+        }
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
 </script>
 
 <style>
@@ -297,6 +377,83 @@ const previewLabel =
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .uploader {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: var(--border-width) dashed var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+  }
+
+  .uploader__copy strong {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .uploader__copy p {
+    margin-top: 2px;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .uploader__fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: var(--space-2);
+    align-items: end;
+  }
+
+  .uploader__fields label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .uploader__fields input {
+    width: 100%;
+    height: var(--control-height-sm);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .uploader__fields input[type='file'] {
+    padding: var(--space-1);
+  }
+
+  .upload-button {
+    height: var(--control-height-sm);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .upload-button:disabled {
+    opacity: 0.5;
+  }
+
+  .uploader__status {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  @media (max-width: 900px) {
+    .uploader__fields {
+      grid-template-columns: 1fr;
+    }
   }
 
   .notice {

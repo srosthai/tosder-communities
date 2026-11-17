@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { apiRoute, json } from '../../lib/api';
 import { checkDatabase, getPrisma } from '../../db/prisma';
+import { DATABASE_URL } from 'astro:env/server';
 
 export const GET: APIRoute = apiRoute(async (_context, requestId) => {
   const startedAt = performance.now();
@@ -42,6 +43,16 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
     }
   }
 
+  const target = (() => {
+    if (!DATABASE_URL) return null;
+    try {
+      const url = new URL(DATABASE_URL);
+      return { host: url.hostname, database: url.pathname.replace(/^\//, '') || 'unknown' };
+    } catch {
+      return null;
+    }
+  })();
+
   const healthy = databaseCheck.reachable === true && schemaState === 'ready';
 
   return json(
@@ -50,6 +61,7 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
       app: 'tosder-communities',
       checks: {
         database: databaseCheck,
+        target,
         schema: schemaState,
         features: schema,
       },
