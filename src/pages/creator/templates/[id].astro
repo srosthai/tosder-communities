@@ -1,0 +1,415 @@
+---
+import { ArrowLeft, Save } from '@lucide/astro';
+import { z } from 'zod';
+import PublicPage from '../../../components/public/PublicPage.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import Input from '../../../components/ui/Input.astro';
+import Select from '../../../components/ui/Select.astro';
+import Textarea from '../../../components/ui/Textarea.astro';
+import { getPrisma } from '../../../db/prisma';
+import { ApiError } from '../../../lib/api';
+import { getSessionUser } from '../../../lib/auth-user';
+import { ensureMemberProfile } from '../../../lib/profiles';
+import {
+  getCreatorTemplate,
+  templateStatusMeta,
+} from '../../../lib/templates';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro);
+if (!user) {
+  return Astro.redirect(
+    `/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`,
+  );
+}
+
+await ensureMemberProfile(user);
+const id = z.uuid().safeParse(Astro.params.id);
+
+if (!id.success) {
+  Astro.response.status = 404;
+}
+
+const template = id.success
+  ? await getCreatorTemplate(id.data, user.id)
+  : null;
+
+if (!template) {
+  Astro.response.status = 404;
+}
+
+const provinces = await getPrisma().province.findMany({
+  where: { status: 'PUBLISHED' },
+  orderBy: { name: 'asc' },
+  select: { id: true, name: true },
+});
+
+let errorMessage: string | null = null;
+let saved = Astro.url.searchParams.get('saved') === '1';
+
+if (template && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const schema = z.object({
+    title: z.string().trim().min(2, 'Enter a title.').max(120),
+    summary: z.string().trim().max(400).optional().default(''),
+    description: z.string().trim().max(6000).optional().default(''),
+    provinceId: z.uuid().optional().or(z.literal('')),
+    language: z.enum(['en', 'km']).default('en'),
+    season: z.string().trim().max(80).optional().default(''),
+    budgetMinCents: z.number().int().min(0).nullable().optional(),
+    budgetMaxCents: z.number().int().min(0).nullable().optional(),
+  }).superRefine((value, context) => {
+    if (
+      value.budgetMinCents != null &&
+      value.budgetMaxCents != null &&
+      value.budgetMinCents > value.budgetMaxCents
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['budgetMaxCents'],
+        message: 'The upper budget must be greater than or equal to the lower budget.',
+      });
+    }
+  });
+
+  const value = (name: string) => String(form.get(name) ?? '').trim();
+  const numberOrNull = (name: string) => {
+    const raw = value(name);
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? Math.round(parsed * 100) : Number.NaN;
+  };
+
+  const parsed = schema.safeParse({
+    title: value('title'),
+    summary: value('summary'),
+    description: value('description'),
+    provinceId: value('provinceId'),
+    language: value('language') || 'en',
+    season: value('season'),
+    budgetMinCents: numberOrNull('budgetMin'),
+    budgetMaxCents: numberOrNull('budgetMax'),
+  });
+
+  if (!parsed.success) {
+    errorMessage = parsed.error.issues.map((issue) => issue.message).join(' ');
+  } else {
+    try {
+      await getPrisma().travelTemplate.update({
+        where: { id: template.id },
+        data: {
+          title: parsed.data.title,
+          summary: parsed.data.summary || null,
+          description: parsed.data.description || null,
+          provinceId: parsed.data.provinceId || null,
+          language: parsed.data.language,
+          season: parsed.data.season || null,
+          budgetMinCents: parsed.data.budgetMinCents ?? null,
+          budgetMaxCents: parsed.data.budgetMaxCents ?? null,
+        },
+      });
+
+      await getPrisma().auditEvent.create({
+        data: {
+          actorId: user.id,
+          actorEmail: user.email,
+          action: 'template.updated',
+          entityType: 'travel_template',
+          entityId: template.id,
+          summary: `Updated ${parsed.data.title}`,
+        },
+      });
+
+      return Astro.redirect(`/creator/templates/${template.id}?saved=1`);
+    } catch (error) {
+      if (error instanceof ApiError) errorMessage = error.message;
+      else throw error;
+    }
+  }
+}
+
+const meta = template ? templateStatusMeta[template.status] : null;
+const backHref = '/creator';
+---
+
+{template && meta ? (
+  <PublicPage
+    label="Creator Studio"
+    title={template.title}
+    description="Set the working title and trip details. The daily plan comes next in the builder."
+    noindex
+  >
+    <div slot="actions" class="header-actions">
+      <a class="back-link" href={backHref}>
+        <ArrowLeft size={14} stroke-width={1.75} />
+        All templates
+      </a>
+      <Badge variant={meta.variant} dot>{meta.label}</Badge>
+      {template.publishedVersion && (
+        <span class="version-note">Published v{template.publishedVersion.versionNumber}</span>
+      )}
+    </div>
+
+    {saved && <p class="notice notice--success" role="status">Draft saved.</p>}
+    {errorMessage && <p class="notice notice--error" role="alert">{errorMessage}</p>}
+
+    <form method="post" class="editor">
+      <section class="editor__section" aria-labelledby="basics-heading">
+        <div class="section-heading">
+          <h2 id="basics-heading">Basics</h2>
+          <p>The title and summary travelers see first.</p>
+        </div>
+        <div class="grid">
+          <Input label="Title" name="title" value={template.title} required maxlength={120} />
+          <Input
+            label="Slug"
+            name="slug"
+            value={template.slug}
+            hint="Generated from the title when the template is published."
+            disabled
+          />
+          <Select label="Province" name="provinceId">
+            <option value="">No province</option>
+            {provinces.map((province) => (
+              <option value={province.id} selected={province.id === template.provinceId}>
+                {province.name}
+              </option>
+            ))}
+          </Select>
+          <Select label="Language" name="language">
+            <option value="en" selected={template.language === 'en'}>English</option>
+            <option value="km" selected={template.language === 'km'}>Khmer</option>
+          </Select>
+        </div>
+        <Input
+          label="Summary"
+          name="summary"
+          value={template.summary ?? ''}
+          hint="One or two lines that explain who the trip is for."
+          maxlength={400}
+        />
+        <Textarea
+          label="Description"
+          name="description"
+          value={template.description ?? ''}
+          rows={5}
+          maxlength={6000}
+        />
+      </section>
+
+      <section class="editor__section" aria-labelledby="details-heading">
+        <div class="section-heading">
+          <h2 id="details-heading">Trip details</h2>
+          <p>Budget is in USD and covers the whole itinerary per person.</p>
+        </div>
+        <div class="grid">
+          <Input
+            label="Budget from (USD)"
+            name="budgetMin"
+            type="number"
+            min="0"
+            step="1"
+            value={template.budgetMinCents != null ? template.budgetMinCents / 100 : ''}
+            placeholder="120"
+          />
+          <Input
+            label="Budget to (USD)"
+            name="budgetMax"
+            type="number"
+            min="0"
+            step="1"
+            value={template.budgetMaxCents != null ? template.budgetMaxCents / 100 : ''}
+            placeholder="300"
+          />
+          <Input
+            label="Season"
+            name="season"
+            value={template.season ?? ''}
+            placeholder="November to March"
+            maxlength={80}
+          />
+        </div>
+      </section>
+
+      <div class="editor__actions">
+        <a class="back-link" href={backHref}>Cancel</a>
+        <button class="save-button" type="submit">
+          <Save size={14} stroke-width={1.75} />
+          Save draft
+        </button>
+      </div>
+    </form>
+
+    <section class="plan-note" aria-labelledby="plan-heading">
+      <h2 id="plan-heading">Daily plan</h2>
+      <p>
+        {template._count.versions > 0
+          ? `This template has ${template._count.versions} published ${template._count.versions === 1 ? 'version' : 'versions'}.`
+          : 'No published versions yet.'}
+        {' '}The day and item builder is the next milestone. Your saved basics will carry over.
+      </p>
+      <p class="plan-note__meta">
+        Last updated {template.updatedAt.toLocaleString('en', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        })}
+      </p>
+    </section>
+  </PublicPage>
+) : (
+  <PublicPage
+    title="Template not found"
+    description="The template does not exist or belongs to another creator."
+    noindex
+  >
+    <a class="back-link" href="/creator">
+      <ArrowLeft size={14} stroke-width={1.75} />
+      Back to Creator Studio
+    </a>
+  </PublicPage>
+)}
+
+<style>
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-top: var(--space-4);
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .back-link:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .version-note,
+  .plan-note__meta {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .notice--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  }
+
+  .notice--error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  }
+
+  .editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .editor__section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .section-heading h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .section-heading p {
+    margin-top: 2px;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .editor__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    position: sticky;
+    bottom: 0;
+    padding: var(--space-3) 0;
+    border-top: var(--border-width) solid var(--color-border);
+    background: var(--color-bg);
+  }
+
+  .save-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: var(--control-height-md);
+    margin-left: auto;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .save-button:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .plan-note {
+    margin-top: var(--space-6);
+    padding: var(--space-5);
+    border: var(--border-width) dashed var(--color-border);
+    border-radius: var(--radius-xl);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .plan-note h2 {
+    margin-bottom: var(--space-2);
+    color: var(--color-text);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .plan-note__meta {
+    margin-top: var(--space-2);
+  }
+
+  @media (max-width: 760px) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

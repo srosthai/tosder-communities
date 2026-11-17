@@ -1,6 +1,6 @@
 import { CONTENT_ADMIN_EMAILS } from 'astro:env/server';
 import type { APIContext } from 'astro';
-import { getAuthForRequest } from './auth-server';
+import { getSessionUser } from './auth-user';
 
 export function isContentAdminEmail(email?: string | null): boolean {
   if (!email) return false;
@@ -13,12 +13,6 @@ export function isContentAdminEmail(email?: string | null): boolean {
 }
 
 export async function getContentAdmin(context: APIContext) {
-  try {
-    const auth = getAuthForRequest(context);
-    const { data } = await auth.getSession();
-    const user = data?.user ?? null;
-    return { user, allowed: Boolean(user && isContentAdminEmail(user.email)) };
-  } catch {
-    return { user: null, allowed: false };
-  }
+  const user = await getSessionUser(context);
+  return { user, allowed: Boolean(user && isContentAdminEmail(user.email)) };
 }
