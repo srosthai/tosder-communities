@@ -97,11 +97,11 @@ test.describe.serial('Creator Studio', () => {
 
     await page.getByRole('link', { name: /Open the editor/ }).click();
     await expect(page.getByRole('heading', { name: 'Untitled template' })).toBeVisible();
-    await page.getByLabel('Title').fill(`Studio test ${stamp}`);
+    await page.getByLabel('Title', { exact: true }).fill(`Studio test ${stamp}`);
     await page.getByLabel('Summary').fill('A two-day test itinerary.');
     await page.getByLabel('Province').selectOption({ label: 'Siem Reap' });
-    await page.getByRole('button', { name: 'Save draft' }).click();
-    await expect(page.getByText('Draft saved.')).toBeVisible();
+    await page.getByRole('button', { name: 'Save and continue' }).click();
+    await expect(page).toHaveURL(/step=details/);
 
     await page.goto('/creator');
     const row = page.locator(`[data-template-id="${templateId}"]`);

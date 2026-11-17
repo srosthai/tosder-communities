@@ -7,7 +7,7 @@ Creator Studio is the signed-in workspace for travel templates.
 | Route | Purpose |
 | --- | --- |
 | `/creator` | Template list, search, status filter, onboarding, lifecycle actions. |
-| `/creator/templates/[id]` | Draft basics editor; the daily-plan builder extends this surface. |
+| `/creator/templates/[id]` | Six-step template builder. See `docs/template-builder.md`. |
 | `POST /api/creator/templates` | Create a draft. Returns `201` with the template id, slug, and status. |
 | `POST /api/creator/templates/[id]/submit-review` | Move a draft or rejected template to pending review. |
 | `POST /api/creator/templates/[id]/duplicate` | Create an independent draft with copied days and items. |

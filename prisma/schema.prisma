@@ -243,7 +243,9 @@ model TravelTemplate {
   budgetMinCents     Int?           @map("budget_min_cents")
   budgetMaxCents     Int?           @map("budget_max_cents")
   currency           String         @default("USD")
+  style              String?
   season             String?
+  logisticsNotes     String?        @map("logistics_notes")
   transport          String[]       @default([])
   audience           String[]       @default([])
   language           String         @default("en")
