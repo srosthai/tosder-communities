@@ -1,19 +1,60 @@
 ---
-import { ArrowLeft, Save } from '@lucide/astro';
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
+  CircleCheck,
+  Clock,
+  Copy,
+  MapPin,
+  Plus,
+  Trash,
+} from '@lucide/astro';
 import { z } from 'zod';
-import PublicPage from '../../../components/public/PublicPage.astro';
+import PublicLayout from '../../../layouts/PublicLayout.astro';
 import Badge from '../../../components/ui/Badge.astro';
+import Checkbox from '../../../components/ui/Checkbox.astro';
 import Input from '../../../components/ui/Input.astro';
+import MapView from '../../../components/public/MapView.astro';
 import Select from '../../../components/ui/Select.astro';
 import Textarea from '../../../components/ui/Textarea.astro';
 import { getPrisma } from '../../../db/prisma';
-import { ApiError } from '../../../lib/api';
+import { ApiError, json } from '../../../lib/api';
 import { getSessionUser } from '../../../lib/auth-user';
 import { ensureMemberProfile } from '../../../lib/profiles';
+import { getCreatorTemplate, submitTemplateForReview, templateStatusMeta } from '../../../lib/templates';
 import {
-  getCreatorTemplate,
-  templateStatusMeta,
-} from '../../../lib/templates';
+  audienceOptions,
+  builderSteps,
+  createDay,
+  createItem,
+  duplicateDay,
+  duplicateItem,
+  findScheduleConflicts,
+  formatMoney,
+  formatTimeRange,
+  getStepErrors,
+  getTemplateProgress,
+  itemTypeLabels,
+  moveDay,
+  moveItem,
+  parseBuilderStep,
+  parseInteger,
+  parseMoney,
+  parseTime,
+  removeDay,
+  removeItem,
+  saveTemplateMetadata,
+  templateStyles,
+  transportOptions,
+  updateDay,
+  updateItem,
+  validateTemplate,
+  type BuilderStep,
+  type BuilderTemplate,
+} from '../../../lib/template-builder';
 
 export const prerender = false;
 
@@ -31,13 +72,195 @@ if (!id.success) {
   Astro.response.status = 404;
 }
 
-const template = id.success
-  ? await getCreatorTemplate(id.data, user.id)
+let template = id.success
+  ? ((await getCreatorTemplate(id.data, user.id)) as BuilderTemplate | null)
   : null;
 
 if (!template) {
   Astro.response.status = 404;
 }
+
+const step = parseBuilderStep(Astro.url.searchParams.get('step'));
+const isAutosave = Astro.request.headers.get('x-autosave') === '1';
+let errorMessage: string | null = Astro.url.searchParams.get('error')?.slice(0, 200) ?? null;
+
+const saveResponse = () =>
+  json({ ok: true, savedAt: new Date().toISOString() });
+
+if (template && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const value = (name: string) => String(form.get(name) ?? '').trim();
+  const nullable = (name: string) => value(name) || null;
+  const nextStep = String(form.get('next') ?? step);
+
+  try {
+    switch (intent) {
+      case 'save-basics': {
+        await saveTemplateMetadata(template.id, user.id, {
+          title: value('title'),
+          slug: value('slug'),
+          summary: nullable('summary'),
+          description: nullable('description'),
+          coverPhotoUrl: nullable('coverPhotoUrl'),
+          provinceId: value('provinceId') || null,
+          language: value('language') || 'en',
+        });
+        break;
+      }
+      case 'save-details': {
+        await saveTemplateMetadata(template.id, user.id, {
+          style: value('style') || null,
+          season: nullable('season'),
+          budgetMinCents: parseMoney(form.get('budgetMin')),
+          budgetMaxCents: parseMoney(form.get('budgetMax')),
+          transport: form.getAll('transport').map(String),
+          audience: form.getAll('audience').map(String),
+        });
+        break;
+      }
+      case 'save-logistics': {
+        await saveTemplateMetadata(template.id, user.id, {
+          logisticsNotes: nullable('logisticsNotes'),
+        });
+        break;
+      }
+      case 'add-day': {
+        const day = await createDay(template.id, user.id);
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=plan&day=${day.id}&saved=1`);
+      }
+      case 'update-day': {
+        await updateDay(template.id, user.id, value('dayId'), {
+          title: value('title'),
+          summary: nullable('summary'),
+        });
+        break;
+      }
+      case 'move-day': {
+        await moveDay(template.id, user.id, value('dayId'), value('direction') === 'up' ? 'up' : 'down');
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=plan&saved=1`);
+      }
+      case 'duplicate-day': {
+        await duplicateDay(template.id, user.id, value('dayId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=plan&saved=1`);
+      }
+      case 'remove-day': {
+        await removeDay(template.id, user.id, value('dayId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=plan&saved=1`);
+      }
+      case 'add-item': {
+        const item = await createItem(template.id, user.id, value('dayId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=plan&day=${value('dayId')}&item=${item.id}&saved=1`);
+      }
+      case 'update-item': {
+        const type = value('type');
+        const allowedTypes = Object.keys(itemTypeLabels) as Array<keyof typeof itemTypeLabels>;
+        await updateItem(template.id, user.id, value('dayId'), value('itemId'), {
+          title: value('title'),
+          type: allowedTypes.includes(type as never)
+            ? (type as keyof typeof itemTypeLabels)
+            : 'ATTRACTION',
+          destinationId: value('destinationId') || null,
+          description: nullable('description'),
+          practicalTips: nullable('practicalTips'),
+          startTime: parseTime(form.get('startTime')),
+          endTime: parseTime(form.get('endTime')),
+          durationMinutes: parseInteger(form.get('durationMinutes')),
+          estimatedCostCents: parseMoney(form.get('estimatedCost')),
+          photoUrl: nullable('photoUrl'),
+        });
+        break;
+      }
+      case 'move-item': {
+        await moveItem(
+          template.id,
+          user.id,
+          value('dayId'),
+          value('itemId'),
+          value('direction') === 'up' ? 'up' : 'down',
+        );
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=plan&day=${value('dayId')}&saved=1`);
+      }
+      case 'duplicate-item': {
+        await duplicateItem(template.id, user.id, value('dayId'), value('itemId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=plan&day=${value('dayId')}&saved=1`);
+      }
+      case 'remove-item': {
+        await removeItem(template.id, user.id, value('dayId'), value('itemId'));
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=plan&day=${value('dayId')}&saved=1`);
+      }
+      case 'submit-review': {
+        if (value('guidelines') !== 'on') {
+          throw new ApiError({
+            status: 422,
+            code: 'guidelines_required',
+            message: 'Confirm the community guidelines before submitting.',
+          });
+        }
+        const refreshed = (await getCreatorTemplate(template.id, user.id)) as BuilderTemplate;
+        const validation = validateTemplate(refreshed, {
+          emailVerified: Boolean(user.emailVerified),
+          status: refreshed.status,
+        });
+        if (validation.blocking.length > 0) {
+          throw new ApiError({
+            status: 422,
+            code: 'validation_error',
+            message: 'Fix the blocking issues before submitting for review.',
+          });
+        }
+        await submitTemplateForReview(template.id, user.id, {
+          id: user.id,
+          email: user.email,
+        });
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=publish&submitted=1`);
+      }
+      default:
+        break;
+    }
+
+    if (isAutosave) return saveResponse();
+
+    template = (await getCreatorTemplate(template.id, user.id)) as BuilderTemplate;
+    const stepErrors = getStepErrors(template, step);
+    if (stepErrors.length > 0 && nextStep !== step) {
+      return Astro.redirect(
+        `/creator/templates/${template.id}?step=${step}&error=${encodeURIComponent(stepErrors[0])}`,
+      );
+    }
+    if (nextStep !== step) {
+      return Astro.redirect(`/creator/templates/${template.id}?step=${nextStep}&saved=1`);
+    }
+    return Astro.redirect(`/creator/templates/${template.id}?step=${step}&saved=1`);
+  } catch (error) {
+    if (isAutosave) {
+      const message = error instanceof ApiError ? error.message : 'Could not save.';
+      return json({ ok: false, error: message }, error instanceof ApiError ? error.status : 500);
+    }
+    const message = error instanceof ApiError ? error.message : 'The change could not be saved.';
+    return Astro.redirect(
+      `/creator/templates/${template.id}?step=${step}&error=${encodeURIComponent(message)}`,
+    );
+  }
+}
+
+const progress = template ? getTemplateProgress(template) : null;
+const completedCount = progress
+  ? Object.values(progress).filter(Boolean).length
+  : 0;
+const saved = Astro.url.searchParams.get('saved') === '1';
+const submitted = Astro.url.searchParams.get('submitted') === '1';
+const activeDay = Astro.url.searchParams.get('day');
+const activeItem = Astro.url.searchParams.get('item');
 
 const provinces = await getPrisma().province.findMany({
   where: { status: 'PUBLISHED' },
@@ -45,241 +268,891 @@ const provinces = await getPrisma().province.findMany({
   select: { id: true, name: true },
 });
 
-let errorMessage: string | null = null;
-let saved = Astro.url.searchParams.get('saved') === '1';
+const destinations = await getPrisma().destination.findMany({
+  where: { status: 'PUBLISHED' },
+  orderBy: { name: 'asc' },
+  select: {
+    id: true,
+    name: true,
+    province: { select: { name: true } },
+  },
+});
 
-if (template && Astro.request.method === 'POST') {
-  const form = await Astro.request.formData();
-  const schema = z.object({
-    title: z.string().trim().min(2, 'Enter a title.').max(120),
-    summary: z.string().trim().max(400).optional().default(''),
-    description: z.string().trim().max(6000).optional().default(''),
-    provinceId: z.uuid().optional().or(z.literal('')),
-    language: z.enum(['en', 'km']).default('en'),
-    season: z.string().trim().max(80).optional().default(''),
-    budgetMinCents: z.number().int().min(0).nullable().optional(),
-    budgetMaxCents: z.number().int().min(0).nullable().optional(),
-  }).superRefine((value, context) => {
-    if (
-      value.budgetMinCents != null &&
-      value.budgetMaxCents != null &&
-      value.budgetMinCents > value.budgetMaxCents
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['budgetMaxCents'],
-        message: 'The upper budget must be greater than or equal to the lower budget.',
-      });
-    }
-  });
+const validation = template
+  ? validateTemplate(template, {
+      emailVerified: Boolean(user.emailVerified),
+      status: template.status,
+    })
+  : { blocking: [], warnings: [] };
 
-  const value = (name: string) => String(form.get(name) ?? '').trim();
-  const numberOrNull = (name: string) => {
-    const raw = value(name);
-    if (!raw) return null;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? Math.round(parsed * 100) : Number.NaN;
-  };
+const mapPoints = template
+  ? Array.from(
+      new Map(
+        template.days
+          .flatMap((day) => day.items)
+          .filter((item) => item.destination?.latitude != null && item.destination?.longitude != null)
+          .map((item) => [
+            item.destination!.slug,
+            {
+              name: item.destination!.name,
+              slug: item.destination!.slug,
+              province: item.destination!.province?.name ?? 'Cambodia',
+              latitude: item.destination!.latitude,
+              longitude: item.destination!.longitude,
+            },
+          ]),
+      ).values(),
+    )
+  : [];
 
-  const parsed = schema.safeParse({
-    title: value('title'),
-    summary: value('summary'),
-    description: value('description'),
-    provinceId: value('provinceId'),
-    language: value('language') || 'en',
-    season: value('season'),
-    budgetMinCents: numberOrNull('budgetMin'),
-    budgetMaxCents: numberOrNull('budgetMax'),
-  });
+const statusMeta = template ? templateStatusMeta[template.status] : null;
 
-  if (!parsed.success) {
-    errorMessage = parsed.error.issues.map((issue) => issue.message).join(' ');
-  } else {
-    try {
-      await getPrisma().travelTemplate.update({
-        where: { id: template.id },
-        data: {
-          title: parsed.data.title,
-          summary: parsed.data.summary || null,
-          description: parsed.data.description || null,
-          provinceId: parsed.data.provinceId || null,
-          language: parsed.data.language,
-          season: parsed.data.season || null,
-          budgetMinCents: parsed.data.budgetMinCents ?? null,
-          budgetMaxCents: parsed.data.budgetMaxCents ?? null,
-        },
-      });
+const stepHref = (key: BuilderStep) =>
+  `/creator/templates/${template?.id}?step=${key}`;
 
-      await getPrisma().auditEvent.create({
-        data: {
-          actorId: user.id,
-          actorEmail: user.email,
-          action: 'template.updated',
-          entityType: 'travel_template',
-          entityId: template.id,
-          summary: `Updated ${parsed.data.title}`,
-        },
-      });
-
-      return Astro.redirect(`/creator/templates/${template.id}?saved=1`);
-    } catch (error) {
-      if (error instanceof ApiError) errorMessage = error.message;
-      else throw error;
-    }
-  }
-}
-
-const meta = template ? templateStatusMeta[template.status] : null;
-const backHref = '/creator';
 ---
 
-{template && meta ? (
-  <PublicPage
-    label="Creator Studio"
-    title={template.title}
-    description="Set the working title and trip details. The daily plan comes next in the builder."
+{template && statusMeta ? (
+  <PublicLayout
+    title={`${template.title || 'Untitled template'} — Creator Studio`}
+    description="Build a reusable travel itinerary."
     noindex
   >
-    <div slot="actions" class="header-actions">
-      <a class="back-link" href={backHref}>
-        <ArrowLeft size={14} stroke-width={1.75} />
-        All templates
-      </a>
-      <Badge variant={meta.variant} dot>{meta.label}</Badge>
-      {template.publishedVersion && (
-        <span class="version-note">Published v{template.publishedVersion.versionNumber}</span>
-      )}
-    </div>
+    <section class="builder">
+      <div class="container">
+        <header class="builder__header">
+          <div class="builder__identity">
+            <a class="back-link" href="/creator">
+              <ArrowLeft size={14} stroke-width={1.75} />
+              Creator Studio
+            </a>
+            <h1>{template.title || 'Untitled template'}</h1>
+            <div class="builder__meta">
+              <Badge variant={statusMeta.variant} dot>{statusMeta.label}</Badge>
+              <span>{template.durationDays} {template.durationDays === 1 ? 'day' : 'days'}</span>
+              <span>Updated {template.updatedAt.toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+            </div>
+          </div>
+          <div class="builder__save">
+            <span data-save-state aria-live="polite">Saved</span>
+            <a class="preview-link" href={stepHref('preview')}>
+              Preview
+              <ArrowRight size={13} stroke-width={2} />
+            </a>
+          </div>
+        </header>
 
-    {saved && <p class="notice notice--success" role="status">Draft saved.</p>}
-    {errorMessage && <p class="notice notice--error" role="alert">{errorMessage}</p>}
+        <div class="builder__progress">
+          <div class="builder__progress-bar" aria-hidden="true">
+            <span style={`width: ${(completedCount / builderSteps.length) * 100}%`}></span>
+          </div>
+          <span>{completedCount} of {builderSteps.length} steps complete</span>
+        </div>
 
-    <form method="post" class="editor">
-      <section class="editor__section" aria-labelledby="basics-heading">
-        <div class="section-heading">
-          <h2 id="basics-heading">Basics</h2>
-          <p>The title and summary travelers see first.</p>
-        </div>
-        <div class="grid">
-          <Input label="Title" name="title" value={template.title} required maxlength={120} />
-          <Input
-            label="Slug"
-            name="slug"
-            value={template.slug}
-            hint="Generated from the title when the template is published."
-            disabled
-          />
-          <Select label="Province" name="provinceId">
-            <option value="">No province</option>
-            {provinces.map((province) => (
-              <option value={province.id} selected={province.id === template.provinceId}>
-                {province.name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Language" name="language">
-            <option value="en" selected={template.language === 'en'}>English</option>
-            <option value="km" selected={template.language === 'km'}>Khmer</option>
-          </Select>
-        </div>
-        <Input
-          label="Summary"
-          name="summary"
-          value={template.summary ?? ''}
-          hint="One or two lines that explain who the trip is for."
-          maxlength={400}
-        />
-        <Textarea
-          label="Description"
-          name="description"
-          value={template.description ?? ''}
-          rows={5}
-          maxlength={6000}
-        />
-      </section>
+        <nav class="stepper" aria-label="Template steps">
+          {builderSteps.map((entry, index) => (
+            <a
+              href={stepHref(entry.key)}
+              class:list={[
+                'stepper__step',
+                {
+                  'is-current': entry.key === step,
+                  'is-complete': progress?.[entry.key],
+                },
+              ]}
+              aria-current={entry.key === step ? 'step' : undefined}
+              data-step-link
+            >
+              <span class="stepper__number">
+                {progress?.[entry.key] ? <CircleCheck size={14} stroke-width={2} /> : index + 1}
+              </span>
+              <span class="stepper__label">
+                {entry.label}
+                {progress?.[entry.key] && <span class="sr-only">, complete</span>}
+              </span>
+            </a>
+          ))}
+        </nav>
 
-      <section class="editor__section" aria-labelledby="details-heading">
-        <div class="section-heading">
-          <h2 id="details-heading">Trip details</h2>
-          <p>Budget is in USD and covers the whole itinerary per person.</p>
-        </div>
-        <div class="grid">
-          <Input
-            label="Budget from (USD)"
-            name="budgetMin"
-            type="number"
-            min="0"
-            step="1"
-            value={template.budgetMinCents != null ? template.budgetMinCents / 100 : ''}
-            placeholder="120"
-          />
-          <Input
-            label="Budget to (USD)"
-            name="budgetMax"
-            type="number"
-            min="0"
-            step="1"
-            value={template.budgetMaxCents != null ? template.budgetMaxCents / 100 : ''}
-            placeholder="300"
-          />
-          <Input
-            label="Season"
-            name="season"
-            value={template.season ?? ''}
-            placeholder="November to March"
-            maxlength={80}
-          />
-        </div>
-      </section>
+        {saved && <p class="notice notice--success" role="status">Step saved.</p>}
+        {submitted && (
+          <p class="notice notice--success" role="status">
+            Submitted for review. You can keep editing until a moderator responds.
+          </p>
+        )}
+        {errorMessage && <p class="notice notice--error" role="alert">{errorMessage}</p>}
 
-      <div class="editor__actions">
-        <a class="back-link" href={backHref}>Cancel</a>
-        <button class="save-button" type="submit">
-          <Save size={14} stroke-width={1.75} />
-          Save draft
-        </button>
+        {step === 'basics' && (
+          <section class="step" aria-labelledby="step-heading">
+            <div class="step__heading">
+              <p class="eyebrow">Step 1 of 6</p>
+              <h2 id="step-heading">Basics</h2>
+              <p>Name the trip, choose the province, and write the short pitch.</p>
+            </div>
+
+            <form method="post" data-autosave class="step__form">
+              <input type="hidden" name="intent" value="save-basics" />
+              <div class="grid">
+                <Input label="Title" name="title" value={template.title} maxlength={120} />
+                <Input
+                  label="Slug"
+                  name="slug"
+                  value={template.slug}
+                  hint="Lowercase words separated by hyphens. Used in the public URL."
+                  maxlength={90}
+                />
+                <Select label="Province" name="provinceId">
+                  <option value="">Choose a province</option>
+                  {provinces.map((province) => (
+                    <option value={province.id} selected={province.id === template.provinceId}>
+                      {province.name}
+                    </option>
+                  ))}
+                </Select>
+                <Select label="Language" name="language">
+                  <option value="en" selected={template.language === 'en'}>English</option>
+                  <option value="km" selected={template.language === 'km'}>Khmer</option>
+                </Select>
+              </div>
+
+              <Input
+                label="Summary"
+                name="summary"
+                value={template.summary ?? ''}
+                hint="One or two lines that explain who the trip is for."
+                maxlength={400}
+              />
+              <Textarea
+                label="Description"
+                name="description"
+                value={template.description ?? ''}
+                rows={5}
+                maxlength={6000}
+              />
+              <Input
+                label="Cover image URL"
+                name="coverPhotoUrl"
+                value={template.coverPhotoUrl ?? ''}
+                hint="Use a licensed image with a recorded credit."
+                maxlength={600}
+              />
+
+              <div class="derived">
+                <Clock size={15} stroke-width={1.75} />
+                <span>
+                  Duration: <strong>{template.durationDays} {template.durationDays === 1 ? 'day' : 'days'}</strong>.
+                  Duration is derived from the daily plan.
+                </span>
+                <a href={stepHref('plan')} data-step-link>Edit days</a>
+              </div>
+
+              <div class="step__actions">
+                <button class="primary-action" type="submit" name="next" value="details">
+                  Save and continue
+                  <ArrowRight size={14} stroke-width={2} />
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {step === 'details' && (
+          <section class="step" aria-labelledby="step-heading">
+            <div class="step__heading">
+              <p class="eyebrow">Step 2 of 6</p>
+              <h2 id="step-heading">Trip details</h2>
+              <p>Set expectations for budget, season, transport, and who the trip suits.</p>
+            </div>
+
+            <form method="post" data-autosave class="step__form">
+              <input type="hidden" name="intent" value="save-details" />
+              <div class="grid">
+                <Select label="Travel style" name="style">
+                  <option value="">Choose a style</option>
+                  {templateStyles.map((style) => (
+                    <option value={style} selected={template.style === style}>{style}</option>
+                  ))}
+                </Select>
+                <Input
+                  label="Best season"
+                  name="season"
+                  value={template.season ?? ''}
+                  placeholder="November to March"
+                  maxlength={80}
+                />
+                <Input
+                  label="Budget from (USD)"
+                  name="budgetMin"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={template.budgetMinCents != null ? template.budgetMinCents / 100 : ''}
+                  placeholder="120"
+                />
+                <Input
+                  label="Budget to (USD)"
+                  name="budgetMax"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={template.budgetMaxCents != null ? template.budgetMaxCents / 100 : ''}
+                  placeholder="300"
+                />
+              </div>
+
+              <fieldset class="choice-group">
+                <legend>Transport</legend>
+                <div class="choice-grid">
+                  {transportOptions.map((option) => (
+                    <Checkbox
+                      label={option}
+                      name="transport"
+                      value={option}
+                      checked={template.transport.includes(option)}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset class="choice-group">
+                <legend>Audience</legend>
+                <div class="choice-grid">
+                  {audienceOptions.map((option) => (
+                    <Checkbox
+                      label={option}
+                      name="audience"
+                      value={option}
+                      checked={template.audience.includes(option)}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+
+              <p class="currency-note">Estimated costs use USD throughout the itinerary.</p>
+
+              <div class="step__actions">
+                <button class="secondary-action" type="submit" name="next" value="basics">Back</button>
+                <button class="primary-action" type="submit" name="next" value="plan">
+                  Save and continue
+                  <ArrowRight size={14} stroke-width={2} />
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {step === 'plan' && (
+          <section class="step" aria-labelledby="step-heading">
+            <div class="step__heading step__heading--split">
+              <div>
+                <p class="eyebrow">Step 3 of 6</p>
+                <h2 id="step-heading">Daily plan</h2>
+                <p>Add each day, then fill it with timed stops. Order is explicit, not inferred from time.</p>
+              </div>
+              <form method="post">
+                <input type="hidden" name="intent" value="add-day" />
+                <button class="secondary-action" type="submit">
+                  <Plus size={14} stroke-width={2} />
+                  Add day
+                </button>
+              </form>
+            </div>
+
+            {template.days.length === 0 ? (
+              <div class="empty-day">
+                <MapPin size={22} stroke-width={1.75} />
+                <h3>No days yet.</h3>
+                <p>Add day 1 and start with the first stop.</p>
+                <form method="post">
+                  <input type="hidden" name="intent" value="add-day" />
+                  <button class="primary-action" type="submit">
+                    <Plus size={14} stroke-width={2} />
+                    Add day 1
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div class="days">
+                {template.days.map((day, dayIndex) => {
+                  const conflicts = findScheduleConflicts(day.items);
+                  return (
+                    <article
+                      class:list={['day-card', { 'is-active': activeDay === day.id }]}
+                      id={`day-${day.id}`}
+                    >
+                      <header class="day-card__header">
+                        <form method="post" data-autosave class="day-card__title">
+                          <input type="hidden" name="intent" value="update-day" />
+                          <input type="hidden" name="dayId" value={day.id} />
+                          <span class="day-badge">Day {day.dayNumber}</span>
+                          <div class="day-card__fields">
+                            <label class="sr-only" for={`day-title-${day.id}`}>Day title</label>
+                            <input
+                              id={`day-title-${day.id}`}
+                              name="title"
+                              value={day.title ?? ''}
+                              placeholder={`Day ${day.dayNumber} title`}
+                              maxlength={120}
+                            />
+                            <label class="sr-only" for={`day-summary-${day.id}`}>Day summary</label>
+                            <input
+                              id={`day-summary-${day.id}`}
+                              name="summary"
+                              value={day.summary ?? ''}
+                              placeholder="Optional theme for the day"
+                              maxlength={300}
+                            />
+                          </div>
+                        </form>
+
+                        <div class="day-card__actions">
+                          <form method="post">
+                            <input type="hidden" name="intent" value="move-day" />
+                            <input type="hidden" name="dayId" value={day.id} />
+                            <input type="hidden" name="direction" value="up" />
+                            <button class="icon-action" type="submit" aria-label={`Move day ${day.dayNumber} up`} disabled={dayIndex === 0}>
+                              <ChevronUp size={14} stroke-width={2} />
+                            </button>
+                          </form>
+                          <form method="post">
+                            <input type="hidden" name="intent" value="move-day" />
+                            <input type="hidden" name="dayId" value={day.id} />
+                            <input type="hidden" name="direction" value="down" />
+                            <button class="icon-action" type="submit" aria-label={`Move day ${day.dayNumber} down`} disabled={dayIndex === template.days.length - 1}>
+                              <ChevronDown size={14} stroke-width={2} />
+                            </button>
+                          </form>
+                          <form method="post">
+                            <input type="hidden" name="intent" value="duplicate-day" />
+                            <input type="hidden" name="dayId" value={day.id} />
+                            <button class="icon-action" type="submit" aria-label={`Duplicate day ${day.dayNumber}`}>
+                              <Copy size={13} stroke-width={1.75} />
+                            </button>
+                          </form>
+                          <form method="post" data-confirm={`Remove day ${day.dayNumber} and all its items?`}>
+                            <input type="hidden" name="intent" value="remove-day" />
+                            <input type="hidden" name="dayId" value={day.id} />
+                            <button class="icon-action icon-action--danger" type="submit" aria-label={`Remove day ${day.dayNumber}`}>
+                              <Trash size={13} stroke-width={1.75} />
+                            </button>
+                          </form>
+                        </div>
+                      </header>
+
+                      {conflicts.length > 0 && (
+                        <div class="conflict" role="status">
+                          <CircleAlert size={15} stroke-width={1.75} />
+                          <div>
+                            {conflicts.map((conflict) => (
+                              <p>“{conflict.first}” overlaps “{conflict.second}”.</p>
+                            ))}
+                            <span>Warnings do not block saving, but check the timing before publishing.</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div class="items">
+                        {day.items.length === 0 && (
+                          <p class="items__empty">No stops yet. Add the first activity for this day.</p>
+                        )}
+
+                        {day.items.map((item, itemIndex) => (
+                          <details class="item" open={activeDay === day.id && (activeItem ? item.id === activeItem : itemIndex === 0)}>
+                            <summary class="item__summary">
+                              <span class="item__time">{formatTimeRange(item.startTime, item.endTime)}</span>
+                              <span class="item__title">{item.title || 'Untitled stop'}</span>
+                              <span class="item__type">{itemTypeLabels[item.type]}</span>
+                              {item.estimatedCostCents != null && (
+                                <span class="item__cost">{formatMoney(item.estimatedCostCents, item.currency)}</span>
+                              )}
+                            </summary>
+
+                            <form method="post" data-autosave class="item__form">
+                              <input type="hidden" name="intent" value="update-item" />
+                              <input type="hidden" name="dayId" value={day.id} />
+                              <input type="hidden" name="itemId" value={item.id} />
+
+                              <div class="item__grid">
+                                <Input label="Title" name="title" value={item.title} maxlength={120} />
+                                <Select label="Type" name="type">
+                                  {Object.entries(itemTypeLabels).map(([value, label]) => (
+                                    <option value={value} selected={item.type === value}>{label}</option>
+                                  ))}
+                                </Select>
+                                <Select label="Linked destination" name="destinationId">
+                                  <option value="">Custom activity</option>
+                                  {destinations.map((destination) => (
+                                    <option value={destination.id} selected={item.destinationId === destination.id}>
+                                      {destination.name} · {destination.province?.name ?? 'Cambodia'}
+                                    </option>
+                                  ))}
+                                </Select>
+                                <Input label="Photo URL" name="photoUrl" value={item.photoUrl ?? ''} maxlength={600} />
+                                <Input label="Start time" name="startTime" type="time" value={item.startTime ?? ''} />
+                                <Input label="End time" name="endTime" type="time" value={item.endTime ?? ''} />
+                                <Input
+                                  label="Duration (minutes)"
+                                  name="durationMinutes"
+                                  type="number"
+                                  min="0"
+                                  step="5"
+                                  value={item.durationMinutes ?? ''}
+                                />
+                                <Input
+                                  label="Estimated cost (USD)"
+                                  name="estimatedCost"
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={item.estimatedCostCents != null ? item.estimatedCostCents / 100 : ''}
+                                />
+                              </div>
+
+                              <Textarea
+                                label="Description"
+                                name="description"
+                                value={item.description ?? ''}
+                                rows={2}
+                                maxlength={1200}
+                              />
+                              <Textarea
+                                label="Practical tips"
+                                name="practicalTips"
+                                value={item.practicalTips ?? ''}
+                                rows={2}
+                                maxlength={1200}
+                              />
+                              <div class="item__save">
+                                <button class="row-action" type="submit">Save item</button>
+                              </div>
+                            </form>
+
+                            <div class="item__actions">
+                              <form method="post">
+                                <input type="hidden" name="intent" value="move-item" />
+                                <input type="hidden" name="dayId" value={day.id} />
+                                <input type="hidden" name="itemId" value={item.id} />
+                                <input type="hidden" name="direction" value="up" />
+                                <button class="row-action" type="submit" disabled={itemIndex === 0}>
+                                  <ChevronUp size={12} stroke-width={2} /> Move up
+                                </button>
+                              </form>
+                              <form method="post">
+                                <input type="hidden" name="intent" value="move-item" />
+                                <input type="hidden" name="dayId" value={day.id} />
+                                <input type="hidden" name="itemId" value={item.id} />
+                                <input type="hidden" name="direction" value="down" />
+                                <button class="row-action" type="submit" disabled={itemIndex === day.items.length - 1}>
+                                  <ChevronDown size={12} stroke-width={2} /> Move down
+                                </button>
+                              </form>
+                              <form method="post">
+                                <input type="hidden" name="intent" value="duplicate-item" />
+                                <input type="hidden" name="dayId" value={day.id} />
+                                <input type="hidden" name="itemId" value={item.id} />
+                                <button class="row-action" type="submit">
+                                  <Copy size={12} stroke-width={1.75} /> Duplicate
+                                </button>
+                              </form>
+                              <form method="post" data-confirm="Remove this item?">
+                                <input type="hidden" name="intent" value="remove-item" />
+                                <input type="hidden" name="dayId" value={day.id} />
+                                <input type="hidden" name="itemId" value={item.id} />
+                                <button class="row-action row-action--danger" type="submit">
+                                  <Trash size={12} stroke-width={1.75} /> Remove
+                                </button>
+                              </form>
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+
+                      <form method="post" class="add-item">
+                        <input type="hidden" name="intent" value="add-item" />
+                        <input type="hidden" name="dayId" value={day.id} />
+                        <button class="secondary-action" type="submit">
+                          <Plus size={14} stroke-width={2} />
+                          Add item
+                        </button>
+                      </form>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            <div class="step__actions step__actions--end">
+              <a class="secondary-action" href={stepHref('details')} data-step-link>Back</a>
+              <a class="primary-action" href={stepHref('map')} data-step-link>
+                Continue to map
+                <ArrowRight size={14} stroke-width={2} />
+              </a>
+            </div>
+          </section>
+        )}
+
+        {step === 'map' && (
+          <section class="step" aria-labelledby="step-heading">
+            <div class="step__heading">
+              <p class="eyebrow">Step 4 of 6</p>
+              <h2 id="step-heading">Map & logistics</h2>
+              <p>Read the visit order top to bottom, then add the travel notes travelers need.</p>
+            </div>
+
+            <div class="map-grid">
+              <div class="map-grid__stops">
+                {template.days.map((day) => (
+                  <section class="stop-day">
+                    <h3>Day {day.dayNumber}{day.title ? ` · ${day.title}` : ''}</h3>
+                    {day.items.length === 0 ? (
+                      <p class="subtle">No stops yet.</p>
+                    ) : (
+                      <ol>
+                        {day.items.map((item) => (
+                          <li>
+                            <span class="stop-time">{formatTimeRange(item.startTime, item.endTime)}</span>
+                            <span>
+                              {item.destination ? (
+                                <a href={`/destinations/${item.destination.slug}`} target="_blank" rel="noreferrer">
+                                  {item.title}
+                                </a>
+                              ) : (
+                                item.title
+                              )}
+                              {item.destination?.province?.name && (
+                                <span class="stop-place">{item.destination.province.name}</span>
+                              )}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </section>
+                ))}
+              </div>
+
+              <div class="map-grid__map">
+                {mapPoints.length > 0 ? (
+                  <MapView
+                    destinations={mapPoints}
+                    height="24rem"
+                    zoom={7}
+                    label="Ordered stops with coordinates"
+                  />
+                ) : (
+                  <div class="map-empty">
+                    <MapPin size={20} stroke-width={1.75} />
+                    <p>Link stops to published destinations to see them on the map.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <form method="post" data-autosave class="step__form">
+              <input type="hidden" name="intent" value="save-logistics" />
+              <Textarea
+                label="Travel notes"
+                name="logisticsNotes"
+                value={template.logisticsNotes ?? ''}
+                rows={5}
+                maxlength={4000}
+                placeholder="How to get between stops, what to book ahead, and where timing is tight."
+              />
+              <div class="step__actions">
+                <button class="secondary-action" type="submit" name="next" value="plan">Back</button>
+                <button class="primary-action" type="submit" name="next" value="preview">
+                  Save and preview
+                  <ArrowRight size={14} stroke-width={2} />
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {step === 'preview' && (
+          <section class="step" aria-labelledby="step-heading">
+            <div class="step__heading">
+              <p class="eyebrow">Step 5 of 6</p>
+              <h2 id="step-heading">Preview</h2>
+              <p>This is the itinerary a traveler will read. Check the pace and the notes.</p>
+            </div>
+
+            <article class="preview">
+              {template.coverPhotoUrl && (
+                <img class="preview__cover" src={template.coverPhotoUrl} alt="" width="1200" height="675" />
+              )}
+              <header class="preview__header">
+                <p class="eyebrow">{template.province?.name ?? 'Cambodia'} · {template.durationDays} days</p>
+                <h2>{template.title || 'Untitled template'}</h2>
+                <p class="preview__summary">{template.summary || 'No summary yet.'}</p>
+                <div class="preview__meta">
+                  {template.style && <span>{template.style}</span>}
+                  {template.season && <span>Best in {template.season}</span>}
+                  {(template.budgetMinCents != null || template.budgetMaxCents != null) && (
+                    <span>
+                      {formatMoney(template.budgetMinCents)}–{formatMoney(template.budgetMaxCents)} per person
+                    </span>
+                  )}
+                  {template.transport.length > 0 && <span>{template.transport.join(' · ')}</span>}
+                  {template.audience.length > 0 && <span>{template.audience.join(' · ')}</span>}
+                </div>
+              </header>
+
+              {template.description && <p class="preview__description">{template.description}</p>}
+
+              <div class="preview__days">
+                {template.days.map((day) => (
+                  <section class="preview-day">
+                    <h3>Day {day.dayNumber}{day.title ? ` · ${day.title}` : ''}</h3>
+                    {day.summary && <p class="preview-day__summary">{day.summary}</p>}
+                    {day.items.length === 0 ? (
+                      <p class="subtle">No items yet.</p>
+                    ) : (
+                      <ol class="preview-items">
+                        {day.items.map((item) => (
+                          <li>
+                            <div class="preview-item__head">
+                              <span class="preview-item__time">{formatTimeRange(item.startTime, item.endTime)}</span>
+                              <strong>{item.title || 'Untitled stop'}</strong>
+                              <span class="preview-item__type">{itemTypeLabels[item.type]}</span>
+                              {item.estimatedCostCents != null && (
+                                <span class="preview-item__cost">{formatMoney(item.estimatedCostCents, item.currency)}</span>
+                              )}
+                            </div>
+                            {item.description && <p>{item.description}</p>}
+                            {item.practicalTips && <p class="preview-item__tips">Tip: {item.practicalTips}</p>}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </section>
+                ))}
+              </div>
+
+              {template.logisticsNotes && (
+                <section class="preview-notes">
+                  <h3>Logistics</h3>
+                  <p>{template.logisticsNotes}</p>
+                </section>
+              )}
+            </article>
+
+            <div class="step__actions step__actions--end">
+              <a class="secondary-action" href={stepHref('plan')} data-step-link>Back to plan</a>
+              <a class="primary-action" href={stepHref('publish')} data-step-link>
+                Continue to publish
+                <ArrowRight size={14} stroke-width={2} />
+              </a>
+            </div>
+          </section>
+        )}
+
+        {step === 'publish' && (
+          <section class="step" aria-labelledby="step-heading">
+            <div class="step__heading">
+              <p class="eyebrow">Step 6 of 6</p>
+              <h2 id="step-heading">Publish</h2>
+              <p>Blocking issues must be fixed. Warnings are yours to judge.</p>
+            </div>
+
+            <div class="checks">
+              <section class="checks__group" aria-labelledby="blocking-heading">
+                <h3 id="blocking-heading">
+                  <CircleAlert size={16} stroke-width={2} />
+                  Blocking issues
+                  <span>{validation.blocking.length}</span>
+                </h3>
+                {validation.blocking.length === 0 ? (
+                  <p class="checks__clear"><CircleCheck size={15} stroke-width={2} /> Nothing blocking.</p>
+                ) : (
+                  <ul class="checks__list checks__list--blocking">
+                    {validation.blocking.map((message) => <li>{message}</li>)}
+                  </ul>
+                )}
+              </section>
+
+              <section class="checks__group" aria-labelledby="warnings-heading">
+                <h3 id="warnings-heading">
+                  Warnings
+                  <span>{validation.warnings.length}</span>
+                </h3>
+                {validation.warnings.length === 0 ? (
+                  <p class="checks__clear">No warnings.</p>
+                ) : (
+                  <ul class="checks__list checks__list--warnings">
+                    {validation.warnings.map((message) => <li>{message}</li>)}
+                  </ul>
+                )}
+              </section>
+            </div>
+
+            {template.status === 'DRAFT' || template.status === 'REJECTED' ? (
+              <form method="post" class="publish-form">
+                <input type="hidden" name="intent" value="submit-review" />
+                <label class="guidelines">
+                  <input type="checkbox" name="guidelines" value="on" required />
+                  <span>
+                    I confirm this itinerary is my own work, uses licensed photos, and follows the
+                    community guidelines.
+                  </span>
+                </label>
+                <div class="step__actions">
+                  <a class="secondary-action" href={stepHref('preview')} data-step-link>Back to preview</a>
+                  <button class="primary-action" type="submit" disabled={validation.blocking.length > 0}>
+                    Submit for review
+                    <ArrowRight size={14} stroke-width={2} />
+                  </button>
+                </div>
+                {validation.blocking.length > 0 && (
+                  <p class="publish-hint">Fix the blocking issues above to enable submission.</p>
+                )}
+              </form>
+            ) : (
+              <div class="publish-state">
+                <Badge variant={statusMeta.variant} dot>{statusMeta.label}</Badge>
+                <p>{statusMeta.description}</p>
+                {template.status === 'PENDING_REVIEW' && (
+                  <p>Your submission is in the moderation queue. You can keep editing the draft.</p>
+                )}
+                {template.status === 'PUBLISHED' && (
+                  <p>Publishing a revision is handled by the next moderation milestone.</p>
+                )}
+                {template.status === 'ARCHIVED' && (
+                  <p>Restore this template from Creator Studio before submitting it again.</p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
       </div>
-    </form>
-
-    <section class="plan-note" aria-labelledby="plan-heading">
-      <h2 id="plan-heading">Daily plan</h2>
-      <p>
-        {template._count.versions > 0
-          ? `This template has ${template._count.versions} published ${template._count.versions === 1 ? 'version' : 'versions'}.`
-          : 'No published versions yet.'}
-        {' '}The day and item builder is the next milestone. Your saved basics will carry over.
-      </p>
-      <p class="plan-note__meta">
-        Last updated {template.updatedAt.toLocaleString('en', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-        })}
-      </p>
     </section>
-  </PublicPage>
+  </PublicLayout>
 ) : (
-  <PublicPage
-    title="Template not found"
-    description="The template does not exist or belongs to another creator."
-    noindex
-  >
-    <a class="back-link" href="/creator">
-      <ArrowLeft size={14} stroke-width={1.75} />
-      Back to Creator Studio
-    </a>
-  </PublicPage>
+  <PublicLayout title="Template not found — Creator Studio" noindex>
+    <section class="not-found">
+      <div class="container">
+        <p class="eyebrow">Creator Studio</p>
+        <h1>Template not found.</h1>
+        <p>This template does not exist or belongs to another creator.</p>
+        <a class="primary-action" href="/creator">
+          <ArrowLeft size={14} stroke-width={2} />
+          Back to Creator Studio
+        </a>
+      </div>
+    </section>
+  </PublicLayout>
 )}
 
+<script>
+  const state = document.querySelector<HTMLElement>('[data-save-state]');
+  const dirty = new Set<HTMLFormElement>();
+  const timers = new WeakMap<HTMLFormElement, number>();
+  const versions = new WeakMap<HTMLFormElement, number>();
+  let pending = 0;
+
+  const setState = (text: string, kind: 'saved' | 'dirty' | 'error' = 'saved') => {
+    if (!state) return;
+    state.textContent = text;
+    state.dataset.state = kind;
+  };
+
+  const save = async (form: HTMLFormElement) => {
+    if (!dirty.has(form)) return;
+    const version = versions.get(form) ?? 0;
+    const body = new FormData(form);
+    pending += 1;
+    setState('Saving…', 'dirty');
+
+    try {
+      const response = await fetch(form.action || location.href, {
+        method: 'POST',
+        body,
+        headers: { 'x-autosave': '1' },
+        credentials: 'same-origin',
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok === false) {
+        throw new Error(result.error || 'Could not save.');
+      }
+
+      if ((versions.get(form) ?? 0) === version) {
+        dirty.delete(form);
+        setState('Saved', 'saved');
+      } else {
+        setState('Unsaved changes', 'dirty');
+        timers.set(form, window.setTimeout(() => save(form), 300));
+      }
+    } catch (error) {
+      setState(error instanceof Error ? `Not saved: ${error.message}` : 'Not saved', 'error');
+    } finally {
+      pending -= 1;
+    }
+  };
+
+  const schedule = (form: HTMLFormElement) => {
+    dirty.add(form);
+    versions.set(form, (versions.get(form) ?? 0) + 1);
+    setState('Unsaved changes', 'dirty');
+    const current = timers.get(form);
+    if (current) window.clearTimeout(current);
+    timers.set(form, window.setTimeout(() => save(form), 900));
+  };
+
+  document.querySelectorAll<HTMLFormElement>('form[data-autosave]').forEach((form) => {
+    form.addEventListener('input', () => schedule(form));
+    form.addEventListener('change', () => schedule(form));
+  });
+
+  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      if (!window.confirm(form.dataset.confirm || 'Continue?')) {
+        event.preventDefault();
+      }
+    });
+  });
+
+  const flush = async () => {
+    for (let attempt = 0; attempt < 3 && dirty.size > 0; attempt += 1) {
+      for (const form of [...dirty]) {
+        const current = timers.get(form);
+        if (current) window.clearTimeout(current);
+        await save(form);
+      }
+    }
+  };
+
+  document.querySelectorAll<HTMLAnchorElement>('a[data-step-link]').forEach((link) => {
+    link.addEventListener('click', async (event) => {
+      if (dirty.size === 0 && pending === 0) return;
+      event.preventDefault();
+      await flush();
+      window.location.href = link.href;
+    });
+  });
+
+  window.addEventListener('beforeunload', (event) => {
+    if (dirty.size === 0 && pending === 0) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+</script>
+
 <style>
-  .header-actions {
+  .builder {
+    padding: clamp(var(--space-6), 6vw, 4rem) 0 clamp(var(--space-10), 8vw, 6rem);
+  }
+
+  .container {
+    width: min(100% - var(--space-8), 72rem);
+    margin: 0 auto;
+  }
+
+  .builder__header {
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    flex-wrap: wrap;
-    margin-top: var(--space-4);
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-6);
+    margin-bottom: var(--space-5);
   }
 
   .back-link {
@@ -287,7 +1160,7 @@ const backHref = '/creator';
     align-items: center;
     gap: var(--space-1);
     color: var(--color-text-muted);
-    font-size: var(--text-sm);
+    font-size: var(--text-xs);
   }
 
   .back-link:hover {
@@ -296,11 +1169,131 @@ const backHref = '/creator';
     text-underline-offset: 2px;
   }
 
-  .version-note,
-  .plan-note__meta {
+  .builder__identity h1 {
+    margin: var(--space-2) 0 var(--space-2);
+    font-size: clamp(1.75rem, 4vw, 2.75rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.045em;
+    line-height: 1.05;
+  }
+
+  .builder__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .builder__save {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: none;
+  }
+
+  .builder__save [data-save-state] {
     color: var(--color-text-subtle);
     font-family: var(--font-mono);
     font-size: var(--text-xs);
+  }
+
+  .builder__save [data-state='dirty'] {
+    color: var(--color-warning-text);
+  }
+
+  .builder__save [data-state='error'] {
+    color: var(--color-danger-text);
+  }
+
+  .preview-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .builder__progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .builder__progress-bar {
+    flex: 1;
+    height: 3px;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    overflow: hidden;
+  }
+
+  .builder__progress-bar span {
+    display: block;
+    height: 100%;
+    background: var(--color-accent);
+  }
+
+  .stepper {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--space-1);
+    margin-bottom: var(--space-5);
+    padding: var(--space-1);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .stepper__step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .stepper__step:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-text);
+  }
+
+  .stepper__step.is-current {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+  }
+
+  .stepper__number {
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    flex: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-full);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+  }
+
+  .stepper__step.is-complete .stepper__number {
+    border-color: color-mix(in oklch, var(--color-success) 45%, transparent);
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+  }
+
+  .stepper__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .notice {
@@ -323,31 +1316,48 @@ const backHref = '/creator';
     border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
   }
 
-  .editor {
+  .step {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-5);
   }
 
-  .editor__section {
+  .step__heading {
+    max-width: 60ch;
+  }
+
+  .step__heading--split {
     display: flex;
-    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
     gap: var(--space-4);
-    padding: var(--space-5);
-    border: var(--border-width) solid var(--color-border);
-    border-radius: var(--radius-xl);
-    background: var(--color-surface);
+    max-width: none;
   }
 
-  .section-heading h2 {
-    font-size: var(--text-lg);
+  .eyebrow {
+    margin-bottom: var(--space-2);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .step__heading h2 {
+    font-size: var(--text-xl);
     font-weight: var(--weight-semibold);
+    letter-spacing: -0.03em;
   }
 
-  .section-heading p {
-    margin-top: 2px;
+  .step__heading p {
+    margin-top: var(--space-1);
     color: var(--color-text-muted);
     font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .step__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
   }
 
   .grid {
@@ -356,60 +1366,735 @@ const backHref = '/creator';
     gap: var(--space-4);
   }
 
-  .editor__actions {
+  .derived {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
-    position: sticky;
-    bottom: 0;
-    padding: var(--space-3) 0;
-    border-top: var(--border-width) solid var(--color-border);
-    background: var(--color-bg);
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: var(--border-width) dashed var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
   }
 
-  .save-button {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    height: var(--control-height-md);
+  .derived a {
     margin-left: auto;
-    padding: 0 var(--space-3);
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .choice-group {
+    margin: 0;
+    padding: 0;
     border: 0;
-    border-radius: var(--radius-md);
-    background: var(--color-accent);
-    color: var(--color-accent-contrast);
-    font-size: var(--text-sm);
+  }
+
+  .choice-group legend {
+    margin-bottom: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
     font-weight: var(--weight-medium);
   }
 
-  .save-button:hover {
+  .choice-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--space-2);
+  }
+
+  .currency-note {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .step__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .step__actions--end {
+    margin-top: var(--space-2);
+  }
+
+  .primary-action,
+  .secondary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+  }
+
+  .primary-action {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+  }
+
+  .primary-action:hover:not(:disabled) {
     background: var(--color-accent-hover);
   }
 
-  .plan-note {
-    margin-top: var(--space-6);
-    padding: var(--space-5);
+  .primary-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .secondary-action {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+  }
+
+  .secondary-action:hover {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  .empty-day {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-6);
     border: var(--border-width) dashed var(--color-border);
     border-radius: var(--radius-xl);
     color: var(--color-text-muted);
-    font-size: var(--text-sm);
-    line-height: var(--leading-relaxed);
   }
 
-  .plan-note h2 {
-    margin-bottom: var(--space-2);
+  .empty-day h3 {
     color: var(--color-text);
     font-size: var(--text-md);
     font-weight: var(--weight-semibold);
   }
 
-  .plan-note__meta {
-    margin-top: var(--space-2);
+  .empty-day p {
+    font-size: var(--text-sm);
   }
 
-  @media (max-width: 760px) {
-    .grid {
+  .days {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .day-card {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .day-card.is-active {
+    border-color: color-mix(in oklch, var(--color-accent) 35%, var(--color-border));
+  }
+
+  .day-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .day-card__title {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .day-badge {
+    flex: none;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .day-card__fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .day-card__fields input {
+    width: 100%;
+    padding: var(--space-1) var(--space-2);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .day-card__fields input:nth-child(2) {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .day-card__fields input:hover,
+  .day-card__fields input:focus {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    outline: none;
+  }
+
+  .day-card__actions {
+    display: flex;
+    gap: var(--space-1);
+    flex: none;
+  }
+
+  .icon-action {
+    display: inline-grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+  }
+
+  .icon-action:hover:not(:disabled) {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  .icon-action:disabled {
+    opacity: 0.35;
+  }
+
+  .icon-action--danger:hover:not(:disabled) {
+    border-color: color-mix(in oklch, var(--color-danger) 45%, transparent);
+    color: var(--color-danger-text);
+  }
+
+  .conflict {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding: var(--space-3);
+    border: var(--border-width) solid color-mix(in oklch, var(--color-warning) 40%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+    font-size: var(--text-xs);
+  }
+
+  .conflict p {
+    font-weight: var(--weight-medium);
+  }
+
+  .conflict span {
+    display: block;
+    margin-top: 2px;
+    opacity: 0.85;
+  }
+
+  .items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .items__empty {
+    padding: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+  }
+
+  .item {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-subtle);
+  }
+
+  .item__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    cursor: pointer;
+    list-style: none;
+    font-size: var(--text-xs);
+  }
+
+  .item__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .item__time {
+    flex: none;
+    width: 5.5rem;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+  }
+
+  .item__title {
+    flex: 1;
+    min-width: 0;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .item__type {
+    color: var(--color-text-subtle);
+  }
+
+  .item__cost {
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .item[open] .item__summary {
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .item__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .item__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .item__save {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: var(--space-2);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .item__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-3) var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .item__actions form {
+    display: contents;
+  }
+
+  .row-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .row-action:hover:not(:disabled) {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  .row-action:disabled {
+    opacity: 0.35;
+  }
+
+  .row-action--danger {
+    color: var(--color-danger-text);
+  }
+
+  .add-item {
+    margin-top: var(--space-3);
+  }
+
+  .map-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: var(--space-5);
+    align-items: start;
+  }
+
+  .map-grid__stops {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .stop-day h3 {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .stop-day ol {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .stop-day li {
+    display: flex;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .stop-time {
+    flex: none;
+    width: 5.5rem;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .stop-place {
+    margin-left: var(--space-1);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .map-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-8);
+    border: var(--border-width) dashed var(--color-border);
+    border-radius: var(--radius-xl);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+
+  .subtle {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .preview {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    overflow: hidden;
+  }
+
+  .preview__cover {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    background: var(--color-surface-sunken);
+  }
+
+  .preview__header {
+    padding: var(--space-5) var(--space-6);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .preview__header h2 {
+    margin: var(--space-2) 0;
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.045em;
+  }
+
+  .preview__summary {
+    max-width: 60ch;
+    color: var(--color-text-muted);
+    font-size: var(--text-lg);
+  }
+
+  .preview__meta {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .preview__meta span {
+    padding: 2px var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-full);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .preview__description {
+    max-width: 68ch;
+    padding: var(--space-5) var(--space-6) 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .preview__days {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .preview-day h3 {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .preview-day__summary {
+    margin-bottom: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .preview-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .preview-items li {
+    padding-left: var(--space-3);
+    border-left: 2px solid var(--color-border);
+  }
+
+  .preview-item__head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    font-size: var(--text-sm);
+  }
+
+  .preview-item__time {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .preview-item__type,
+  .preview-item__cost {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .preview-items p {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .preview-item__tips {
+    color: var(--color-text-subtle) !important;
+    font-size: var(--text-xs) !important;
+  }
+
+  .preview-notes {
+    padding: var(--space-5) var(--space-6);
+    border-top: var(--border-width) solid var(--color-border);
+    background: var(--color-bg-subtle);
+  }
+
+  .preview-notes h3 {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .preview-notes p {
+    max-width: 70ch;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    white-space: pre-line;
+  }
+
+  .checks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .checks__group {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .checks__group h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .checks__group h3 span {
+    margin-left: auto;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .checks__clear {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-success-text);
+    font-size: var(--text-xs);
+  }
+
+  .checks__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding-left: var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  .checks__list--blocking {
+    color: var(--color-danger-text);
+  }
+
+  .checks__list--warnings {
+    color: var(--color-warning-text);
+  }
+
+  .publish-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .guidelines {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .guidelines input {
+    margin-top: 3px;
+    accent-color: var(--color-accent);
+  }
+
+  .publish-hint {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .publish-state {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .not-found {
+    padding: var(--space-10) 0;
+  }
+
+  .not-found h1 {
+    margin: var(--space-2) 0;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+  }
+
+  .not-found p {
+    margin-bottom: var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 900px) {
+    .stepper {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .builder__header {
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .map-grid,
+    .checks {
       grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .stepper {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid,
+    .item__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .step__heading--split,
+    .day-card__header {
+      flex-direction: column;
+    }
+
+    .day-card__actions {
+      align-self: flex-end;
+    }
+
+    .item__summary {
+      flex-wrap: wrap;
+    }
+
+    .item__time {
+      width: auto;
     }
   }
 </style>

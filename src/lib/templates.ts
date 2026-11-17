@@ -158,7 +158,16 @@ export async function getCreatorTemplate(id: string, creatorId: string) {
           items: {
             orderBy: { sortOrder: 'asc' },
             include: {
-              destination: { select: { id: true, name: true, slug: true } },
+              destination: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  latitude: true,
+                  longitude: true,
+                  province: { select: { name: true } },
+                },
+              },
             },
           },
         },
@@ -245,7 +254,9 @@ export async function duplicateTemplate(
         budgetMinCents: original.budgetMinCents,
         budgetMaxCents: original.budgetMaxCents,
         currency: original.currency,
+        style: original.style,
         season: original.season,
+        logisticsNotes: original.logisticsNotes,
         transport: original.transport,
         audience: original.audience,
         language: original.language,
