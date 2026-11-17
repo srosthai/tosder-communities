@@ -1,0 +1,142 @@
+---
+import { Prisma } from '@prisma/client';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PageHeader from '../../../components/admin/PageHeader.astro';
+import DestinationEditor from '../../../components/admin/DestinationEditor.astro';
+import { getPrisma } from '../../../db/prisma';
+import { getContentAdmin } from '../../../lib/admin-auth';
+import { auditData, formatValidationError, parseDestinationForm } from '../../../lib/admin-content';
+
+export const prerender = false;
+
+const { user, allowed } = await getContentAdmin(Astro);
+
+if (!user) {
+  return Astro.redirect(
+    `/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`,
+  );
+}
+
+let errorMessage: string | null = null;
+
+if (allowed && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const parsed = parseDestinationForm(form);
+
+  if (!parsed.success) {
+    errorMessage = formatValidationError(parsed.error);
+  } else {
+    try {
+      const prisma = getPrisma();
+      const created = await prisma.$transaction(async (tx) => {
+        const destination = await tx.destination.create({
+          data: {
+            name: parsed.data.name,
+            slug: parsed.data.slug,
+            provinceId: parsed.data.provinceId,
+            summary: parsed.data.summary || null,
+            description: parsed.data.description || null,
+            practicalTips: parsed.data.practicalTips || null,
+            latitude: parsed.data.latitude ?? null,
+            longitude: parsed.data.longitude ?? null,
+            status: parsed.data.status,
+            coverPhotoUrl: parsed.data.coverPhotoUrl || parsed.data.photos[0]?.url || null,
+            categories: {
+              create: parsed.data.categoryIds.map((categoryId) => ({ categoryId })),
+            },
+            tags: {
+              create: parsed.data.tagIds.map((tagId) => ({ tagId })),
+            },
+            photos: {
+              create: parsed.data.photos.map((photo, index) => ({
+                url: photo.url,
+                alt: photo.alt,
+                credit: photo.credit,
+                sortOrder: index,
+              })),
+            },
+          },
+        });
+
+        await tx.auditEvent.create({
+          data: auditData(
+            { id: user.id, email: user.email },
+            'destination.created',
+            destination.id,
+            `Created ${destination.name}`,
+            { slug: destination.slug, status: destination.status },
+          ),
+        });
+
+        return destination;
+      });
+
+      return Astro.redirect(`/admin/content/${created.id}?saved=1`);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        errorMessage = 'That slug is already in use. Choose another.';
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+
+const prisma = allowed ? getPrisma() : null;
+const [provinces, categories, tags] = prisma
+  ? await Promise.all([
+      prisma.province.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+      prisma.category.findMany({ orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
+      prisma.tag.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    ])
+  : [[], [], []];
+---
+
+<AdminLayout title="New destination">
+  <PageHeader
+    title="New destination"
+    description="Add a reviewed place to the public catalog. Drafts stay private until published or previewed."
+  >
+    <a class="back-link" href="/admin/content">Back to content</a>
+  </PageHeader>
+
+  {allowed ? (
+    <DestinationEditor
+      mode="create"
+      action="/admin/content/new"
+      provinces={provinces}
+      categories={categories}
+      tags={tags}
+      errorMessage={errorMessage}
+    />
+  ) : (
+    <p class="forbidden" role="alert">
+      Your account does not have content-admin access. Ask an administrator to add your email to the content-admin allowlist.
+    </p>
+  )}
+</AdminLayout>
+
+<style>
+  .back-link {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .back-link:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .forbidden {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+</style>

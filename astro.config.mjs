@@ -27,6 +27,11 @@ export default defineConfig({
         access: 'secret',
         optional: true,
       }),
+      CONTENT_ADMIN_EMAILS: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
     },
   },
   server: {
