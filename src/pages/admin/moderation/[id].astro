@@ -1,0 +1,449 @@
+---
+import { ArrowLeft, Check, X } from '@lucide/astro';
+import { z } from 'zod';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PageHeader from '../../../components/admin/PageHeader.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import Button from '../../../components/ui/Button.astro';
+import { getPrisma } from '../../../db/prisma';
+import { getContentAdmin } from '../../../lib/admin-auth';
+import { validateTemplate, type BuilderTemplate } from '../../../lib/template-builder';
+
+export const prerender = false;
+
+const { user, allowed } = await getContentAdmin(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+const id = z.uuid().safeParse(Astro.params.id);
+if (!id.success) Astro.response.status = 404;
+
+const template = id.success
+  ? await getPrisma().travelTemplate.findUnique({
+      where: { id: id.data },
+      include: {
+        creator: { select: { username: true, displayName: true } },
+        province: { select: { id: true, name: true, slug: true } },
+        publishedVersion: {
+          select: { id: true, versionNumber: true, createdAt: true },
+        },
+        days: {
+          orderBy: { dayNumber: 'asc' },
+          include: {
+            items: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                destination: {
+                  select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    latitude: true,
+                    longitude: true,
+                    province: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+  : null;
+
+if (!template) Astro.response.status = 404;
+
+if (template && allowed && Astro.request.method === 'POST') {
+  return Astro.redirect(`/admin/moderation?template=${template.id}`);
+}
+
+const validation = template
+  ? validateTemplate(template as BuilderTemplate, { emailVerified: true, status: template.status })
+  : { blocking: [], warnings: [] };
+---
+
+<AdminLayout title={template ? `Review ${template.title}` : 'Template not found'}>
+  {template ? (
+    <>
+      <PageHeader
+        title={template.title}
+        description={`${template.creator.displayName} · @${template.creator.username} · ${template.province?.name ?? 'No province'} · ${template.durationDays} days`}
+      >
+        <a class="back-link" href={`/admin/moderation?template=${template.id}`}>
+          <ArrowLeft size={14} stroke-width={1.75} />
+          Back to queue
+        </a>
+      </PageHeader>
+
+      {!allowed ? (
+        <p class="forbidden" role="alert">
+          Your account does not have content-admin access.
+        </p>
+      ) : (
+        <div class="review-layout">
+          <article class="preview">
+            <header class="preview__header">
+              <Badge variant="warning" dot>{template.status}</Badge>
+              <h2>{template.title}</h2>
+              <p>{template.summary || 'No summary provided.'}</p>
+              <div class="preview__meta">
+                {template.style && <span>{template.style}</span>}
+                {template.season && <span>{template.season}</span>}
+                {template.transport.length > 0 && <span>{template.transport.join(' · ')}</span>}
+                {template.audience.length > 0 && <span>{template.audience.join(' · ')}</span>}
+              </div>
+            </header>
+
+            {template.description && <p class="preview__description">{template.description}</p>}
+
+            <div class="preview__days">
+              {template.days.map((day) => (
+                <section class="preview-day">
+                  <h3>Day {day.dayNumber}{day.title ? ` · ${day.title}` : ''}</h3>
+                  {day.summary && <p class="preview-day__summary">{day.summary}</p>}
+                  {day.items.length === 0 ? (
+                    <p class="muted">No items.</p>
+                  ) : (
+                    <ol class="preview-items">
+                      {day.items.map((item) => (
+                        <li>
+                          <div class="preview-item__head">
+                            <span class="preview-item__time">{item.startTime ?? 'Flexible'}{item.endTime ? `–${item.endTime}` : ''}</span>
+                            <strong>{item.title}</strong>
+                            <span class="preview-item__type">{item.type}</span>
+                            {item.estimatedCostCents != null && (
+                              <span class="preview-item__cost">${(item.estimatedCostCents / 100).toFixed(0)}</span>
+                            )}
+                          </div>
+                          {item.description && <p>{item.description}</p>}
+                          {item.practicalTips && <p class="preview-item__tips">Tip: {item.practicalTips}</p>}
+                          {item.destination && (
+                            <a class="preview-item__link" href={`/destinations/${item.destination.slug}`} target="_blank" rel="noreferrer">
+                              {item.destination.name}
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </section>
+              ))}
+            </div>
+
+            {template.logisticsNotes && (
+              <section class="preview-notes">
+                <h3>Logistics</h3>
+                <p>{template.logisticsNotes}</p>
+              </section>
+            )}
+          </article>
+
+          <aside class="review-side">
+            <section class="review-card" aria-labelledby="validation-heading">
+              <h2 id="validation-heading">Validation</h2>
+              {validation.blocking.length === 0 ? (
+                <p class="clear"><Check size={14} stroke-width={2} /> No blocking issues.</p>
+              ) : (
+                <ul class="list list--blocking">
+                  {validation.blocking.map((message) => <li>{message}</li>)}
+                </ul>
+              )}
+              {validation.warnings.length > 0 && (
+                <ul class="list list--warnings">
+                  {validation.warnings.map((message) => <li>{message}</li>)}
+                </ul>
+              )}
+            </section>
+
+            <section class="review-card" aria-labelledby="decision-heading">
+              <h2 id="decision-heading">Decision</h2>
+              <form method="post" action="/admin/moderation" class="decision-form">
+                <input type="hidden" name="intent" value="approve" />
+                <input type="hidden" name="templateId" value={template.id} />
+                <label class="field">
+                  <span>Visibility</span>
+                  <select name="visibility">
+                    <option value="public">Public</option>
+                    <option value="unlisted">Unlisted</option>
+                  </select>
+                </label>
+                <Button type="submit" variant="primary" disabled={validation.blocking.length > 0}>
+                  <Check size={15} stroke-width={1.75} />
+                  Approve and publish
+                </Button>
+              </form>
+
+              <form method="post" action="/admin/moderation" class="decision-form">
+                <input type="hidden" name="intent" value="reject" />
+                <input type="hidden" name="templateId" value={template.id} />
+                <label class="field">
+                  <span>Reason for changes</span>
+                  <textarea name="reason" rows="3" required minlength="3" maxlength="500"></textarea>
+                </label>
+                <Button type="submit" variant="danger">
+                  <X size={15} stroke-width={1.75} />
+                  Request changes
+                </Button>
+              </form>
+            </section>
+          </aside>
+        </div>
+      )}
+    </>
+  ) : (
+    <>
+      <PageHeader title="Template not found" description="The template does not exist." />
+      <a class="back-link" href="/admin/moderation">Back to moderation</a>
+    </>
+  )}
+</AdminLayout>
+
+<style>
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .forbidden {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .review-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 0.75fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .preview {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    overflow: hidden;
+  }
+
+  .preview__header {
+    padding: var(--space-5);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .preview__header h2 {
+    margin: var(--space-2) 0;
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+  }
+
+  .preview__header p {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .preview__meta {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .preview__meta span {
+    padding: 2px var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-full);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .preview__description {
+    padding: var(--space-4) var(--space-5) 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .preview__days {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    padding: var(--space-5);
+  }
+
+  .preview-day h3 {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .preview-day__summary {
+    margin-bottom: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .preview-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .preview-items li {
+    padding-left: var(--space-3);
+    border-left: 2px solid var(--color-border);
+  }
+
+  .preview-item__head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    font-size: var(--text-sm);
+  }
+
+  .preview-item__time,
+  .preview-item__type,
+  .preview-item__cost {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .preview-items p {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .preview-item__tips {
+    color: var(--color-text-subtle) !important;
+    font-size: var(--text-xs) !important;
+  }
+
+  .preview-item__link {
+    display: inline-block;
+    margin-top: var(--space-1);
+    color: var(--color-text);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .preview-notes {
+    padding: var(--space-4) var(--space-5);
+    border-top: var(--border-width) solid var(--color-border);
+    background: var(--color-bg-subtle);
+  }
+
+  .preview-notes h3 {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .preview-notes p {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    white-space: pre-line;
+  }
+
+  .review-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .review-card {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .review-card h2 {
+    margin-bottom: var(--space-3);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .clear {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-success-text);
+    font-size: var(--text-xs);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding-left: var(--space-4);
+    font-size: var(--text-xs);
+  }
+
+  .list--blocking {
+    color: var(--color-danger-text);
+  }
+
+  .list--warnings {
+    margin-top: var(--space-2);
+    color: var(--color-warning-text);
+  }
+
+  .decision-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .decision-form + .decision-form {
+    margin-top: var(--space-3);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .field span {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+  }
+
+  .field select,
+  .field textarea {
+    width: 100%;
+    padding: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .muted {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  @media (max-width: 1000px) {
+    .review-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

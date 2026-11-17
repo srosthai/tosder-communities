@@ -71,6 +71,7 @@ The `todos` table is a smoke test, not part of the final domain model.
 - [Template and versioning model](./docs/template-model.md)
 - [Creator Studio](./docs/creator-studio.md)
 - [Template builder](./docs/template-builder.md)
+- [Publishing and moderation](./docs/publishing.md)
 - [Quality budgets](./docs/quality-budgets.md)
 - [Issues](https://github.com/srosthai/tosder-communities/issues)
 - [Milestones](https://github.com/srosthai/tosder-communities/milestones)

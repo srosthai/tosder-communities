@@ -1,23 +1,158 @@
 ---
-import { LayoutTemplate } from '@lucide/astro';
+import { LayoutTemplate, Search } from '@lucide/astro';
 import PublicPage from '../components/public/PublicPage.astro';
 import PublicButton from '../components/public/PublicButton.astro';
-import Badge from '../components/ui/Badge.astro';
+import TemplateCard from '../components/public/TemplateCard.astro';
 import EmptyState from '../components/ui/EmptyState.astro';
+import { listPublishedTemplates } from '../lib/public-templates';
+
+export const prerender = false;
+
+const q = Astro.url.searchParams.get('q')?.trim() ?? '';
+const page = Number(Astro.url.searchParams.get('page') ?? '1') || 1;
+const result = await listPublishedTemplates({ q, page, pageSize: 9 });
+
+const buildUrl = (overrides: Record<string, string | number | undefined>) => {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (result.page > 1) params.set('page', String(result.page));
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined || value === '' || value === 1) params.delete(key);
+    else params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query ? `/templates?${query}` : '/templates';
+};
 ---
 
 <PublicPage
   label="Travel templates"
   title="Reusable itineraries, not generic listicles."
-  description="Browse day-by-day plans with maps, practical notes, and a clear source. The first reviewed templates are on the way."
+  description="Day-by-day plans with maps, practical notes, and a clear source. Copy one as a starting point and make it your own."
 >
-  <Badge slot="actions" variant="info">In build</Badge>
+  <div class="toolbar">
+    <form method="get" class="search-form" role="search">
+      <label class="sr-only" for="template-search">Search templates</label>
+      <Search size={14} stroke-width={1.75} aria-hidden="true" />
+      <input
+        id="template-search"
+        type="search"
+        name="q"
+        value={q}
+        placeholder="Search by title, place, or creator…"
+        autocomplete="off"
+      />
+      <button type="submit">Apply</button>
+    </form>
+    <p class="count">
+      {result.total} {result.total === 1 ? 'template' : 'templates'}
+    </p>
+  </div>
 
-  <EmptyState
-    title="The first templates are being reviewed"
-    description="Creators can build a draft in the admin preview. Public publishing opens after the creator workflow and moderation pass."
-  >
-    <LayoutTemplate slot="icon" size={20} stroke-width={1.75} />
-    <PublicButton href="/admin">Open admin preview</PublicButton>
-  </EmptyState>
+  {result.templates.length === 0 ? (
+    <EmptyState
+      title={q ? 'No templates match that search' : 'The first templates are in review'}
+      description={
+        q
+          ? 'Try a different title, province, or creator name.'
+          : 'Creators are building and reviewing the first itineraries. Check back soon, or start your own.'
+      }
+    >
+      <LayoutTemplate slot="icon" size={20} stroke-width={1.75} />
+      <PublicButton href={q ? '/templates' : '/creator'}>
+        {q ? 'Clear search' : 'Open Creator Studio'}
+      </PublicButton>
+    </EmptyState>
+  ) : (
+    <div class="template-grid">
+      {result.templates.map((template) => <TemplateCard template={template} />)}
+    </div>
+  )}
+
+  {result.totalPages > 1 && (
+    <nav class="pagination" aria-label="Template pages">
+      {result.page > 1 ? (
+        <PublicButton href={buildUrl({ page: result.page - 1 })} variant="secondary">Previous</PublicButton>
+      ) : (
+        <span />
+      )}
+      <span>Page {result.page} of {result.totalPages}</span>
+      {result.page < result.totalPages ? (
+        <PublicButton href={buildUrl({ page: result.page + 1 })} variant="secondary">Next</PublicButton>
+      ) : (
+        <span />
+      )}
+    </nav>
+  )}
 </PublicPage>
+
+<style>
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+    flex-wrap: wrap;
+  }
+
+  .search-form {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: min(100%, 32rem);
+    height: var(--control-height-md);
+    padding-left: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-subtle);
+  }
+
+  .search-form:focus-within {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent);
+  }
+
+  .search-form input {
+    flex: 1;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .search-form button {
+    height: 100%;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-left: var(--border-width) solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .count {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+</style>

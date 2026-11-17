@@ -1,0 +1,327 @@
+---
+import { ArrowLeft, BadgeCheck, CalendarDays, Route } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import PublicButton from '../../components/public/PublicButton.astro';
+import TemplateCard from '../../components/public/TemplateCard.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { requestOrigin } from '../../lib/request-origin';
+import { getPublicCreatorProfile } from '../../lib/public-templates';
+
+export const prerender = false;
+
+const username = Astro.params.username ?? '';
+const profile = await getPublicCreatorProfile(username);
+
+if (!profile) {
+  Astro.response.status = 404;
+}
+
+const origin = requestOrigin(Astro);
+const canonicalPath = profile ? `/creators/${profile.username}` : undefined;
+const initials = profile?.displayName
+  .split(' ')
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((part) => part[0])
+  .join('')
+  .toUpperCase();
+
+const socialLinks =
+  profile?.socialLinks && typeof profile.socialLinks === 'object'
+    ? Object.entries(profile.socialLinks as Record<string, unknown>)
+        .filter(([, value]) => typeof value === 'string' && /^https?:\/\//.test(value))
+        .slice(0, 5)
+    : [];
+
+const jsonLd =
+  profile && canonicalPath
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ProfilePage',
+        url: new URL(canonicalPath, origin).toString(),
+        mainEntity: {
+          '@type': 'Person',
+          name: profile.displayName,
+          alternateName: profile.username,
+          description: profile.bio ?? undefined,
+          image: profile.avatarUrl ?? undefined,
+        },
+      }
+    : undefined;
+---
+
+{profile ? (
+  <PublicLayout
+    title={`${profile.displayName} — Tosder Communities`}
+    description={profile.bio ?? `Travel templates by ${profile.displayName}.`}
+    canonical={canonicalPath}
+    image={profile.avatarUrl ?? '/image/og-default.png'}
+    imageAlt={profile.displayName}
+    jsonLd={jsonLd}
+  >
+    <section class="profile-page">
+      <div class="container">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span aria-hidden="true">/</span>
+          <a href="/templates">Templates</a>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{profile.displayName}</span>
+        </nav>
+
+        <header class="profile-header">
+          <span class="avatar" aria-hidden="true">
+            {profile.avatarUrl ? (
+              <img src={profile.avatarUrl} alt="" width="96" height="96" loading="lazy" />
+            ) : (
+              initials
+            )}
+          </span>
+          <div class="profile-copy">
+            <p class="label">Creator profile</p>
+            <h1>{profile.displayName}</h1>
+            <p class="handle">@{profile.username}</p>
+            {profile.bio && <p class="bio">{profile.bio}</p>}
+            <div class="profile-meta">
+              <span>
+                <CalendarDays size={14} stroke-width={1.75} />
+                Member since {profile.createdAt.toLocaleDateString('en', { month: 'long', year: 'numeric' })}
+              </span>
+              <span>
+                <Route size={14} stroke-width={1.75} />
+                {profile.qualifiedUses.toLocaleString()} qualified {profile.qualifiedUses === 1 ? 'use' : 'uses'}
+              </span>
+              <span>
+                <BadgeCheck size={14} stroke-width={1.75} />
+                {profile.templates.length} published {profile.templates.length === 1 ? 'template' : 'templates'}
+              </span>
+            </div>
+            {socialLinks.length > 0 && (
+              <div class="socials">
+                {socialLinks.map(([name, value]) => (
+                  <a href={String(value)} rel="noreferrer nofollow" target="_blank">
+                    {name}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </header>
+
+        <section class="templates" aria-labelledby="templates-heading">
+          <div class="section-header">
+            <h2 id="templates-heading">Published templates</h2>
+            <a href="/templates">Browse all</a>
+          </div>
+
+          {profile.templates.length === 0 ? (
+            <EmptyState
+              title="No published templates yet"
+              description="When this creator publishes a reviewed itinerary, it will appear here."
+            >
+              <PublicButton href="/templates" variant="secondary">Browse templates</PublicButton>
+            </EmptyState>
+          ) : (
+            <div class="grid">
+              {profile.templates.map((template) => <TemplateCard template={template} />)}
+            </div>
+          )}
+        </section>
+
+        <a class="back-link" href="/templates">
+          <ArrowLeft size={14} stroke-width={1.75} />
+          Back to templates
+        </a>
+      </div>
+    </section>
+  </PublicLayout>
+) : (
+  <PublicLayout title="Creator not found — Tosder Communities" noindex>
+    <section class="not-found">
+      <div class="container">
+        <p class="label">Error 404</p>
+        <h1>Creator not found.</h1>
+        <p>This profile does not exist or is no longer available.</p>
+        <PublicButton href="/templates">Browse templates</PublicButton>
+      </div>
+    </section>
+  </PublicLayout>
+)}
+
+<style>
+  .profile-page {
+    padding: clamp(var(--space-6), 6vw, 4rem) 0 clamp(var(--space-10), 8vw, 6rem);
+  }
+
+  .container {
+    width: min(100% - var(--space-8), 68rem);
+    margin: 0 auto;
+  }
+
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .profile-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-5);
+    padding-bottom: var(--space-6);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 5rem;
+    height: 5rem;
+    flex: none;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+    overflow: hidden;
+  }
+
+  .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .profile-copy {
+    max-width: 60ch;
+  }
+
+  .label {
+    margin-bottom: var(--space-2);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.05em;
+    line-height: 1.05;
+  }
+
+  .handle {
+    margin-top: 2px;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+
+  .bio {
+    margin-top: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: var(--text-md);
+    line-height: var(--leading-relaxed);
+  }
+
+  .profile-meta {
+    display: flex;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .profile-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .socials {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .socials a {
+    padding: 2px var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-full);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-transform: capitalize;
+  }
+
+  .templates {
+    margin-top: var(--space-7);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .section-header h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .section-header a {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-6);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .back-link:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .not-found {
+    padding: var(--space-10) 0;
+  }
+
+  .not-found h1 {
+    margin: var(--space-2) 0;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+  }
+
+  .not-found p {
+    margin-bottom: var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 640px) {
+    .profile-header {
+      flex-direction: column;
+    }
+  }
+</style>
