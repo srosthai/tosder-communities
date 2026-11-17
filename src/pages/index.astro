@@ -13,8 +13,10 @@ import PublicLayout from '../layouts/PublicLayout.astro';
 import Badge from '../components/ui/Badge.astro';
 import EmptyState from '../components/ui/EmptyState.astro';
 import DestinationCard from '../components/public/DestinationCard.astro';
+import TemplateCard from '../components/public/TemplateCard.astro';
 import PublicButton from '../components/public/PublicButton.astro';
 import { getPrisma } from '../db/prisma';
+import { listPublishedTemplates } from '../lib/public-templates';
 import { requestOrigin } from '../lib/request-origin';
 
 const stops = [
@@ -58,10 +60,12 @@ const homeJsonLd = {
 
 let destinations: DestinationCard[] = [];
 let collections: CollectionCard[] = [];
+let featuredTemplates: Awaited<ReturnType<typeof listPublishedTemplates>>['templates'] = [];
+let featuredCreators: Array<{ username: string; displayName: string; bio: string | null; templateCount: number }> = [];
 
 try {
   const prisma = getPrisma();
-  const [destinationRows, collectionRows] = await Promise.all([
+  const [destinationRows, collectionRows, templateResult, creatorRows] = await Promise.all([
     prisma.destination.findMany({
       where: { status: 'PUBLISHED' },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -90,6 +94,21 @@ try {
         },
       },
     }),
+    listPublishedTemplates({ pageSize: 3 }),
+    prisma.memberProfile.findMany({
+      where: {
+        suspendedAt: null,
+        templates: { some: { status: 'PUBLISHED', publishedVersionId: { not: null } } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 3,
+      select: {
+        username: true,
+        displayName: true,
+        bio: true,
+        _count: { select: { templates: true } },
+      },
+    }),
   ]);
 
   destinations = destinationRows.map((destination) => ({
@@ -110,6 +129,13 @@ try {
     slug: collection.slug,
     description: collection.description,
     destinations: collection.items.map((item) => item.destination.name),
+  }));
+  featuredTemplates = templateResult.templates;
+  featuredCreators = creatorRows.map((creator) => ({
+    username: creator.username,
+    displayName: creator.displayName,
+    bio: creator.bio,
+    templateCount: creator._count.templates,
   }));
 } catch {
   destinations = [];
@@ -308,25 +334,39 @@ try {
   <section class="section" aria-labelledby="next-heading">
     <div class="container">
       <div class="section__intro">
-        <p class="label">Coming next</p>
-        <h2 id="next-heading">The first templates and creator profiles are being prepared.</h2>
+        <p class="label">Published itineraries</p>
+        <h2 id="next-heading">Start with a plan someone already walked.</h2>
       </div>
-      <div class="two-up">
+      {featuredTemplates.length > 0 ? (
+        <div class="template-grid">
+          {featuredTemplates.map((template) => <TemplateCard template={template} />)}
+        </div>
+      ) : (
         <EmptyState
           title="The first reviewed templates are on the way"
-          description="Creators can draft itineraries in the admin preview. Public publishing opens after the creator workflow and moderation pass."
+          description="Creators can draft itineraries in Creator Studio. Public publishing opens after review."
         >
-          <LayoutTemplate slot="icon" size={20} stroke-width={1.75} />
           <PublicButton href="/templates" variant="secondary">See the template page</PublicButton>
         </EmptyState>
-        <EmptyState
-          title="Creator profiles appear with the first published templates"
-          description="Every public plan credits its creator. One account is both traveler and creator."
-        >
-          <Users slot="icon" size={20} stroke-width={1.75} />
-          <PublicButton href="/sign-up">Become a creator</PublicButton>
-        </EmptyState>
-      </div>
+      )}
+
+      {featuredCreators.length > 0 && (
+        <div class="creator-strip">
+          <p class="label">Creators behind the plans</p>
+          <div class="creator-strip__list">
+            {featuredCreators.map((creator) => (
+              <a class="creator-chip" href={`/creators/${creator.username}`}>
+                <span class="creator-chip__avatar" aria-hidden="true">{creator.displayName.slice(0, 2).toUpperCase()}</span>
+                <span>
+                  <strong>{creator.displayName}</strong>
+                  <span>@{creator.username} · {creator.templateCount} templates</span>
+                </span>
+                <ArrowRight size={13} stroke-width={2} aria-hidden="true" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   </section>
 
@@ -629,6 +669,58 @@ try {
     line-height: var(--leading-normal);
   }
 
+  .template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .creator-strip {
+    margin-top: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .creator-strip__list {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .creator-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .creator-chip__avatar {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .creator-chip strong {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .creator-chip span span {
+    display: block;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
   .two-up {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -924,7 +1016,59 @@ try {
     .hero__grid,
     .trust-grid,
     .routes-grid,
-    .two-up {
+    .template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .creator-strip {
+    margin-top: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .creator-strip__list {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .creator-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .creator-chip__avatar {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .creator-chip strong {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .creator-chip span span {
+    display: block;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .two-up {
       grid-template-columns: minmax(0, 1fr);
     }
 

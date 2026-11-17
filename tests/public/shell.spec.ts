@@ -27,7 +27,7 @@ test.describe('public shell', () => {
     await expect(page.locator('.destination-card', { hasText: 'Angkor Wat' })).toBeVisible();
     await expect(page.locator('.destination-card', { hasText: 'Kampot riverside' })).toBeVisible();
     await expect(page.getByText('Temples and quiet roads')).toBeVisible();
-    await expect(page.getByText('Coast and islands')).toBeVisible();
+    await expect(page.getByText('Coast and islands', { exact: true }).first()).toBeVisible();
   });
 
   test('puts the skip link first in the tab order', async ({ page }) => {

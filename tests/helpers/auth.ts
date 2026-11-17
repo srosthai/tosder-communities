@@ -22,6 +22,7 @@ export async function ensureAdmin(page: Page) {
     throw new Error('Set E2E_TEST_PASSWORD in .env.local or the test environment.');
   }
   if (await attemptSignIn(page)) return;
+  await new Promise((resolve) => setTimeout(resolve, 1500));
   if (await attemptSignIn(page)) return;
 
   await page.goto('/sign-up');
@@ -30,5 +31,12 @@ export async function ensureAdmin(page: Page) {
   await page.getByLabel('Password', { exact: true }).fill(adminPassword);
   await page.getByLabel('Confirm password').fill(adminPassword);
   await page.getByRole('button', { name: 'Create account' }).click();
+  await page.waitForURL(/\/(account|sign-up)$/, { timeout: 15_000 }).catch(() => undefined);
+
+  if (new URL(page.url()).pathname === '/sign-up') {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    if (await attemptSignIn(page)) return;
+  }
+
   await expect(page).toHaveURL(/\/account$/, { timeout: 15_000 });
 }

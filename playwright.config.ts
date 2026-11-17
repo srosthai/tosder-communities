@@ -11,13 +11,13 @@ export default defineConfig({
     },
   },
   use: {
-    baseURL: 'http://127.0.0.1:4321',
+    baseURL: 'http://127.0.0.1:4323',
     viewport: { width: 1440, height: 1200 },
     colorScheme: 'light',
   },
   webServer: {
-    command: 'npm run build && npm run start',
-    url: 'http://127.0.0.1:4321',
+    command: 'npm run build && PORT=4323 npm run start',
+    url: 'http://127.0.0.1:4323',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
