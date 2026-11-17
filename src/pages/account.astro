@@ -51,11 +51,11 @@ const user = data.user;
     </dl>
 
     <div class="account-actions">
-      <PublicButton href="/admin">
-        Open the admin preview
+      <PublicButton href="/creator">
+        Open Creator Studio
         <ArrowRight size={14} stroke-width={2} />
       </PublicButton>
-      <PublicButton href="/sign-up" variant="secondary">Invite a traveler</PublicButton>
+      <PublicButton href="/admin" variant="secondary">Open the admin preview</PublicButton>
       {!user.emailVerified && (
         <a class="verify-link" href="/verify-email">Verify email</a>
       )}

@@ -1,0 +1,840 @@
+---
+import {
+  ArrowRight,
+  CircleCheck,
+  Copy,
+  LayoutTemplate,
+  PencilLine,
+  Plus,
+  RotateCcw,
+  Send,
+  Archive,
+} from '@lucide/astro';
+import PublicPage from '../../components/public/PublicPage.astro';
+import Badge from '../../components/ui/Badge.astro';
+import { getSessionUser } from '../../lib/auth-user';
+import {
+  archiveTemplate,
+  createTemplateDraft,
+  duplicateTemplate,
+  listCreatorTemplates,
+  restoreTemplate,
+  submitTemplateForReview,
+  templateStatusMeta,
+  templateStatuses,
+} from '../../lib/templates';
+import { ensureMemberProfile } from '../../lib/profiles';
+import { ApiError } from '../../lib/api';
+import { getPrisma } from '../../db/prisma';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+const profile = await ensureMemberProfile(user);
+const actor = { id: user.id, email: user.email };
+
+const notices: Record<string, string> = {
+  created: 'Draft created. Open it to add the itinerary.',
+  duplicated: 'A copy was created as an independent draft.',
+  archived: 'Template archived. Existing trips keep their source.',
+  restored: 'Template restored as a draft.',
+  submitted: 'Submitted for review. A moderator will take a look.',
+};
+
+const errors: Record<string, string> = {
+  invalid_transition: 'That status change is not allowed from the current state.',
+  action_failed: 'The action could not be completed. Try again.',
+  not_found: 'The template could not be found.',
+};
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const templateId = String(form.get('templateId') ?? '');
+
+  try {
+    if (intent === 'create') {
+      const created = await createTemplateDraft(user.id);
+      return Astro.redirect(`/creator?notice=created&open=${created.id}`);
+    }
+
+    if (intent === 'duplicate') {
+      await duplicateTemplate(templateId, user.id, actor);
+      return Astro.redirect('/creator?notice=duplicated');
+    }
+
+    if (intent === 'archive') {
+      await archiveTemplate(templateId, user.id, actor);
+      return Astro.redirect('/creator?notice=archived');
+    }
+
+    if (intent === 'restore') {
+      await restoreTemplate(templateId, user.id, actor);
+      return Astro.redirect('/creator?notice=restored');
+    }
+
+    if (intent === 'submit-review') {
+      await submitTemplateForReview(templateId, user.id, actor);
+      return Astro.redirect('/creator?notice=submitted');
+    }
+  } catch (error) {
+    const code = error instanceof ApiError ? error.code : 'action_failed';
+    return Astro.redirect(`/creator?error=${code}`);
+  }
+}
+
+const statusParam = Astro.url.searchParams.get('status') ?? 'ALL';
+const status = templateStatuses.includes(statusParam as never)
+  ? (statusParam as (typeof templateStatuses)[number])
+  : 'ALL';
+const q = Astro.url.searchParams.get('q')?.trim() ?? '';
+const page = Number(Astro.url.searchParams.get('page') ?? '1') || 1;
+
+const [result, totalTemplates] = await Promise.all([
+  listCreatorTemplates(user.id, { status, q, page }),
+  getPrisma().travelTemplate.count({ where: { creatorId: user.id } }),
+]);
+
+const notice = Astro.url.searchParams.get('notice');
+const error = Astro.url.searchParams.get('error');
+const openTemplate = Astro.url.searchParams.get('open');
+
+const buildUrl = (overrides: Record<string, string | number | undefined>) => {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (status !== 'ALL') params.set('status', status);
+  if (result.page > 1) params.set('page', String(result.page));
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined || value === '' || value === 'ALL' || value === 1) {
+      params.delete(key);
+    } else {
+      params.set(key, String(value));
+    }
+  }
+
+  const query = params.toString();
+  return query ? `/creator?${query}` : '/creator';
+};
+
+const statusFilters = [
+  { value: 'ALL', label: 'All templates' },
+  ...templateStatuses.map((value) => ({
+    value,
+    label: templateStatusMeta[value].label,
+  })),
+];
+---
+
+<PublicPage
+  label="Creator Studio"
+  title="Your templates, in one place."
+  description="Draft a reusable itinerary, submit it for review, and keep an eye on how travelers use it."
+  noindex
+>
+  <div slot="actions" class="header-actions">
+    <span class="profile-handle">@{profile.username}</span>
+    <form method="post" data-async-form>
+      <input type="hidden" name="intent" value="create" />
+      <button class="primary-action" type="submit">
+        <Plus size={14} stroke-width={2} />
+        Create template
+      </button>
+    </form>
+  </div>
+
+  {notice && notices[notice] && (
+    <p class="notice notice--success" role="status">{notices[notice]}</p>
+  )}
+  {error && (
+    <p class="notice notice--error" role="alert">
+      {errors[error] ?? errors.action_failed}
+    </p>
+  )}
+
+  {totalTemplates === 0 ? (
+    <section class="onboarding" aria-labelledby="onboarding-heading">
+      <div class="onboarding__intro">
+        <p class="eyebrow">First template</p>
+        <h2 id="onboarding-heading">Turn one real trip into a plan someone else can follow.</h2>
+        <p>
+          Start with the route you know best. Add the days, the places worth
+          stopping for, and the practical notes you wish you had before you went.
+        </p>
+        <form method="post" data-async-form>
+          <input type="hidden" name="intent" value="create" />
+          <button class="primary-action" type="submit">
+            <Plus size={14} stroke-width={2} />
+            Start a draft
+          </button>
+        </form>
+      </div>
+      <ol class="checklist">
+        <li><CircleCheck size={16} stroke-width={1.75} /> Create a draft with a working title.</li>
+        <li><CircleCheck size={16} stroke-width={1.75} /> Add each day and its stops.</li>
+        <li><CircleCheck size={16} stroke-width={1.75} /> Preview the itinerary and fix warnings.</li>
+        <li><CircleCheck size={16} stroke-width={1.75} /> Submit it for review when it is ready.</li>
+      </ol>
+    </section>
+  ) : (
+    <>
+      <div class="toolbar">
+        <form method="get" class="toolbar__search">
+          <label class="sr-only" for="template-search">Search templates</label>
+          <input
+            id="template-search"
+            type="search"
+            name="q"
+            value={q}
+            placeholder="Search your templates…"
+            autocomplete="off"
+          />
+          <select name="status" aria-label="Filter by status">
+            {statusFilters.map((filter) => (
+              <option value={filter.value} selected={filter.value === status}>
+                {filter.label}
+              </option>
+            ))}
+          </select>
+          <button type="submit" class="secondary-action">Apply</button>
+          {(q || status !== 'ALL') && <a class="clear-link" href="/creator">Clear</a>}
+        </form>
+        <p class="toolbar__count">
+          {result.total} {result.total === 1 ? 'template' : 'templates'}
+        </p>
+      </div>
+
+      {result.templates.length === 0 ? (
+        <div class="empty">
+          <LayoutTemplate size={22} stroke-width={1.75} />
+          <h2>No templates match.</h2>
+          <p>Try a different search or status filter.</p>
+          <a class="secondary-action" href="/creator">Show all templates</a>
+        </div>
+      ) : (
+        <div class="template-table" role="table" aria-label="Your templates">
+          <div class="template-table__head" role="row">
+            <span role="columnheader">Template</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Plan</span>
+            <span role="columnheader">Activity</span>
+            <span role="columnheader">Updated</span>
+            <span role="columnheader"><span class="sr-only">Actions</span></span>
+          </div>
+
+          {result.templates.map((template) => {
+            const meta = templateStatusMeta[template.status];
+            const hasActivity =
+              template.viewCount > 0 ||
+              template.saveCount > 0 ||
+              template.qualifiedUseCount > 0;
+
+            return (
+              <article class="template-row" role="row" data-template-id={template.id}>
+                <div class="template-row__title" role="cell">
+                  <a href={`/creator/templates/${template.id}`}>
+                    <span class="template-row__name">{template.title}</span>
+                    <span class="template-row__meta">
+                      {template.province?.name ?? 'No province yet'}
+                      {template.publishedVersion
+                        ? ` · v${template.publishedVersion.versionNumber}`
+                        : ''}
+                    </span>
+                  </a>
+                  {template.rejectionReason && (
+                    <p class="rejection">Changes requested: {template.rejectionReason}</p>
+                  )}
+                </div>
+
+                <div role="cell">
+                  <Badge variant={meta.variant} dot>{meta.label}</Badge>
+                </div>
+
+                <div class="template-row__plan" role="cell">
+                  <span>{template.durationDays} {template.durationDays === 1 ? 'day' : 'days'}</span>
+                  <span class="subtle">
+                    {template._count.days} {template._count.days === 1 ? 'day built' : 'days built'}
+                  </span>
+                </div>
+
+                <div class="template-row__activity" role="cell">
+                  {hasActivity ? (
+                    <span>
+                      {template.viewCount.toLocaleString()} views ·{' '}
+                      {template.saveCount.toLocaleString()} saves ·{' '}
+                      {template.qualifiedUseCount.toLocaleString()} uses
+                    </span>
+                  ) : (
+                    <span class="subtle">No activity yet</span>
+                  )}
+                </div>
+
+                <div class="template-row__updated" role="cell">
+                  <time datetime={template.updatedAt.toISOString()}>
+                    {template.updatedAt.toLocaleDateString('en', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </time>
+                </div>
+
+                <div class="template-row__actions" role="cell">
+                  <a class="row-action" href={`/creator/templates/${template.id}`}>
+                    <PencilLine size={13} stroke-width={1.75} />
+                    {template.status === 'PUBLISHED' ? 'Edit revision' : 'Resume'}
+                  </a>
+
+                  {(template.status === 'DRAFT' || template.status === 'REJECTED') && (
+                    <form method="post" data-async-form>
+                      <input type="hidden" name="intent" value="submit-review" />
+                      <input type="hidden" name="templateId" value={template.id} />
+                      <button class="row-action" type="submit">
+                        <Send size={13} stroke-width={1.75} />
+                        Submit
+                      </button>
+                    </form>
+                  )}
+
+                  <form method="post" data-async-form>
+                    <input type="hidden" name="intent" value="duplicate" />
+                    <input type="hidden" name="templateId" value={template.id} />
+                    <button class="row-action" type="submit">
+                      <Copy size={13} stroke-width={1.75} />
+                      Duplicate
+                    </button>
+                  </form>
+
+                  {template.status !== 'ARCHIVED' ? (
+                    <form
+                      method="post"
+                      data-async-form
+                      data-confirm="Archive this template? Existing trips keep their source attribution."
+                    >
+                      <input type="hidden" name="intent" value="archive" />
+                      <input type="hidden" name="templateId" value={template.id} />
+                      <button class="row-action row-action--quiet" type="submit">
+                        <Archive size={13} stroke-width={1.75} />
+                        Archive
+                      </button>
+                    </form>
+                  ) : (
+                    <form method="post" data-async-form>
+                      <input type="hidden" name="intent" value="restore" />
+                      <input type="hidden" name="templateId" value={template.id} />
+                      <button class="row-action" type="submit">
+                        <RotateCcw size={13} stroke-width={1.75} />
+                        Restore
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {result.totalPages > 1 && (
+        <nav class="pagination" aria-label="Template pages">
+          {result.page > 1 ? (
+            <a class="secondary-action" href={buildUrl({ page: result.page - 1 })}>Previous</a>
+          ) : (
+            <span />
+          )}
+          <span>Page {result.page} of {result.totalPages}</span>
+          {result.page < result.totalPages ? (
+            <a class="secondary-action" href={buildUrl({ page: result.page + 1 })}>Next</a>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )}
+    </>
+  )}
+
+  {openTemplate && (
+    <p class="open-hint" role="status">
+      Your draft is ready. <a href={`/creator/templates/${openTemplate}`}>Open the editor <ArrowRight size={12} stroke-width={2} /></a>
+    </p>
+  )}
+
+  <section class="status-guide" aria-labelledby="status-guide-heading">
+    <h2 id="status-guide-heading">What the statuses mean</h2>
+    <dl>
+      {templateStatuses.map((value) => (
+        <div>
+          <dt><Badge variant={templateStatusMeta[value].variant} dot>{templateStatusMeta[value].label}</Badge></dt>
+          <dd>{templateStatusMeta[value].description}</dd>
+        </div>
+      ))}
+    </dl>
+  </section>
+</PublicPage>
+
+<script>
+  document.querySelectorAll<HTMLFormElement>('[data-async-form]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      const message = form.dataset.confirm;
+      if (message && !window.confirm(message)) {
+        event.preventDefault();
+        return;
+      }
+
+      const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      if (button) {
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.dataset.label = button.textContent ?? '';
+        button.textContent = 'Working…';
+      }
+    });
+  });
+</script>
+
+<style>
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+  }
+
+  .profile-handle {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .primary-action,
+  .secondary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+  }
+
+  .primary-action {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+  }
+
+  .primary-action:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .secondary-action {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+  }
+
+  .secondary-action:hover {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  .notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .notice--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  }
+
+  .notice--error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  }
+
+  .onboarding {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: var(--space-6);
+    padding: var(--space-6);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .onboarding__intro h2 {
+    margin: var(--space-2) 0 var(--space-3);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.03em;
+  }
+
+  .onboarding__intro p {
+    max-width: 46ch;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .onboarding__intro form {
+    margin-top: var(--space-4);
+  }
+
+  .eyebrow {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .checklist :global(svg) {
+    flex: none;
+    margin-top: 2px;
+    color: var(--color-success);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .toolbar__search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .toolbar__search input,
+  .toolbar__search select {
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .toolbar__search input {
+    width: min(18rem, 60vw);
+  }
+
+  .clear-link {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .toolbar__count {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-8) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    text-align: center;
+  }
+
+  .empty h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .empty p {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .template-table {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    overflow: hidden;
+  }
+
+  .template-table__head,
+  .template-row {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1.6fr) 8rem 9rem minmax(8rem, 1fr) 7rem minmax(12rem, 1.4fr);
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .template-table__head {
+    border-bottom: var(--border-width) solid var(--color-border);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .template-row {
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .template-row:last-child {
+    border-bottom: 0;
+  }
+
+  .template-row:hover {
+    background: var(--color-bg-subtle);
+  }
+
+  .template-row__title a {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .template-row__name {
+    color: var(--color-text);
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+  }
+
+  .template-row__title a:hover .template-row__name {
+    text-decoration-color: currentColor;
+  }
+
+  .template-row__meta,
+  .template-row__plan,
+  .template-row__updated,
+  .template-row__activity {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .template-row__plan {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .template-row__activity span {
+    display: block;
+  }
+
+  .subtle {
+    color: var(--color-text-subtle);
+  }
+
+  .rejection {
+    margin-top: var(--space-1);
+    color: var(--color-danger-text);
+    font-size: var(--text-xs);
+  }
+
+  .template-row__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+  }
+
+  .template-row__actions form {
+    display: contents;
+  }
+
+  .row-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .row-action:hover {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .row-action--quiet {
+    color: var(--color-text-subtle);
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .open-hint {
+    margin-top: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .open-hint a {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .status-guide {
+    margin-top: var(--space-8);
+    padding-top: var(--space-5);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .status-guide h2 {
+    margin-bottom: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .status-guide dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: var(--space-3) var(--space-5);
+    margin: 0;
+  }
+
+  .status-guide dt {
+    margin-bottom: var(--space-1);
+  }
+
+  .status-guide dd {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+  }
+
+  @media (max-width: 1000px) {
+    .template-table__head {
+      display: none;
+    }
+
+    .template-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      gap: var(--space-2) var(--space-3);
+      padding: var(--space-4);
+    }
+
+    .template-row__title {
+      grid-column: 1;
+    }
+
+    .template-row__actions {
+      grid-column: 1 / -1;
+      justify-content: flex-start;
+      margin-top: var(--space-1);
+    }
+
+    .template-row__plan,
+    .template-row__activity,
+    .template-row__updated {
+      grid-column: 2;
+      text-align: right;
+    }
+
+    .template-row__plan {
+      grid-row: 1;
+    }
+
+    .template-row__activity {
+      grid-row: 2;
+    }
+
+    .template-row__updated {
+      grid-row: 3;
+    }
+
+    .onboarding {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .toolbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .header-actions {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .template-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .template-row__plan,
+    .template-row__activity,
+    .template-row__updated {
+      grid-column: 1;
+      grid-row: auto;
+      text-align: left;
+    }
+  }
+</style>
