@@ -1,6 +1,7 @@
 ---
 import '@fontsource-variable/geist-mono';
 import '../styles/global.css';
+import { requestOrigin } from '../lib/request-origin';
 
 interface Props {
   title: string;
@@ -31,8 +32,9 @@ const {
 } = Astro.props;
 
 const siteName = 'Tosder Communities';
-const canonicalUrl = new URL(canonical ?? Astro.url.pathname, Astro.url.origin).toString();
-const imageUrl = new URL(image, Astro.url.origin).toString();
+const origin = requestOrigin(Astro);
+const canonicalUrl = new URL(canonical ?? Astro.url.pathname, origin).toString();
+const imageUrl = new URL(image, origin).toString();
 const themeColor = theme === 'dark' ? '#141417' : '#ffffff';
 const robots = noindex ? 'noindex, nofollow' : 'index, follow';
 const jsonLdString = jsonLd ? JSON.stringify(jsonLd) : null;

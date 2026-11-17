@@ -15,6 +15,7 @@ import EmptyState from '../components/ui/EmptyState.astro';
 import DestinationCard from '../components/public/DestinationCard.astro';
 import PublicButton from '../components/public/PublicButton.astro';
 import { getPrisma } from '../db/prisma';
+import { requestOrigin } from '../lib/request-origin';
 
 const stops = [
   { day: 'Day 1', place: 'Angkor Wat', detail: 'Sunrise, then the quiet outer temples' },
@@ -40,7 +41,7 @@ interface CollectionCard {
   destinations: string[];
 }
 
-const origin = Astro.url.origin;
+const origin = requestOrigin(Astro);
 const homeJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',

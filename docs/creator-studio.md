@@ -42,8 +42,11 @@ handle; profile editing and the public profile page arrive with #30.
 ## UI behavior
 
 - Server-rendered forms work without JavaScript.
-- A small script adds a confirmation for archive and a disabled “Working…” state
-  on submit.
+- Creator Studio uses soft navigation: lifecycle actions and search replace the
+  studio content from the server response without a full page reload. The URL,
+  browser history, and back/forward behavior stay correct.
+- A confirmation is shown before archive, and submit buttons show a disabled
+  “Working…” state.
 - Errors are shown from a small allowlist of codes, not reflected raw text.
 - Empty states distinguish “no templates yet” from “no filter matches”.
 - Status chips use the same labels and explanations across the studio.

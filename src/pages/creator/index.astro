@@ -138,7 +138,7 @@ const statusFilters = [
 >
   <div slot="actions" class="header-actions">
     <span class="profile-handle">@{profile.username}</span>
-    <form method="post" data-async-form>
+    <form method="post" data-async-action>
       <input type="hidden" name="intent" value="create" />
       <button class="primary-action" type="submit">
         <Plus size={14} stroke-width={2} />
@@ -147,6 +147,7 @@ const statusFilters = [
     </form>
   </div>
 
+  <div data-studio-root>
   {notice && notices[notice] && (
     <p class="notice notice--success" role="status">{notices[notice]}</p>
   )}
@@ -201,7 +202,7 @@ const statusFilters = [
             ))}
           </select>
           <button type="submit" class="secondary-action">Apply</button>
-          {(q || status !== 'ALL') && <a class="clear-link" href="/creator">Clear</a>}
+          {(q || status !== 'ALL') && <a class="clear-link" href="/creator" data-soft-link>Clear</a>}
         </form>
         <p class="toolbar__count">
           {result.total} {result.total === 1 ? 'template' : 'templates'}
@@ -213,7 +214,7 @@ const statusFilters = [
           <LayoutTemplate size={22} stroke-width={1.75} />
           <h2>No templates match.</h2>
           <p>Try a different search or status filter.</p>
-          <a class="secondary-action" href="/creator">Show all templates</a>
+          <a class="secondary-action" href="/creator" data-soft-link>Show all templates</a>
         </div>
       ) : (
         <div class="template-table" role="table" aria-label="Your templates">
@@ -342,13 +343,13 @@ const statusFilters = [
       {result.totalPages > 1 && (
         <nav class="pagination" aria-label="Template pages">
           {result.page > 1 ? (
-            <a class="secondary-action" href={buildUrl({ page: result.page - 1 })}>Previous</a>
+            <a class="secondary-action" href={buildUrl({ page: result.page - 1 })} data-soft-link>Previous</a>
           ) : (
             <span />
           )}
           <span>Page {result.page} of {result.totalPages}</span>
           {result.page < result.totalPages ? (
-            <a class="secondary-action" href={buildUrl({ page: result.page + 1 })}>Next</a>
+            <a class="secondary-action" href={buildUrl({ page: result.page + 1 })} data-soft-link>Next</a>
           ) : (
             <span />
           )}
@@ -374,25 +375,86 @@ const statusFilters = [
       ))}
     </dl>
   </section>
+  </div>
 </PublicPage>
 
 <script>
-  document.querySelectorAll<HTMLFormElement>('[data-async-form]').forEach((form) => {
-    form.addEventListener('submit', (event) => {
-      const message = form.dataset.confirm;
-      if (message && !window.confirm(message)) {
-        event.preventDefault();
-        return;
-      }
+  import { softSwap } from '../../scripts/soft-navigation';
 
-      const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-      if (button) {
-        button.disabled = true;
-        button.setAttribute('aria-busy', 'true');
-        button.dataset.label = button.textContent ?? '';
-        button.textContent = 'Working…';
+  const ROOT = '[data-studio-root]';
+  let busy = false;
+
+  const swap = async (
+    url: string,
+    init: RequestInit,
+    push = true,
+  ) => {
+    if (busy) return;
+    busy = true;
+    document.querySelector(ROOT)?.setAttribute('aria-busy', 'true');
+
+    try {
+      await softSwap({ rootSelector: ROOT, url, init, push });
+    } finally {
+      document.querySelector(ROOT)?.removeAttribute('aria-busy');
+      busy = false;
+    }
+  };
+
+  document.addEventListener('submit', (event) => {
+    const form = (event.target as HTMLFormElement).closest<HTMLFormElement>('form');
+    if (!form) return;
+    if (!form.closest(ROOT) && !form.matches('[data-async-action]')) return;
+
+    const method = (form.getAttribute('method') || 'get').toLowerCase();
+    event.preventDefault();
+
+    if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) return;
+
+    if (method === 'get') {
+      const url = new URL(form.action || location.href, location.origin);
+      url.search = '';
+      for (const [name, value] of new FormData(form)) {
+        url.searchParams.set(name, String(value));
       }
-    });
+      void swap(url.toString(), { method: 'GET' }).catch(() => undefined);
+      return;
+    }
+
+    const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+    const body = new FormData(form);
+    if (submitter?.name) body.append(submitter.name, submitter.value);
+
+    const originalLabel = submitter?.textContent;
+    if (submitter) {
+      submitter.disabled = true;
+      submitter.dataset.label = originalLabel ?? '';
+      submitter.textContent = 'Working…';
+    }
+
+    void (async () => {
+      try {
+        await swap(form.action || location.href, { method: 'POST', body });
+      } catch {
+        if (submitter) {
+          submitter.disabled = false;
+          submitter.textContent = originalLabel ?? 'Retry';
+        }
+      }
+    })();
+  });
+
+  document.addEventListener('click', (event) => {
+    const link = (event.target as Element).closest<HTMLAnchorElement>('a[data-soft-link]');
+    if (!link || !link.closest(ROOT)) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+    event.preventDefault();
+    void swap(link.href, { method: 'GET' }).catch(() => undefined);
+  });
+
+  window.addEventListener('popstate', () => {
+    void swap(location.href, { method: 'GET' }, false).catch(() => undefined);
   });
 </script>
 

@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
+import { requestOrigin } from '../lib/request-origin';
 
-export const GET: APIRoute = ({ url }) => {
+export const GET: APIRoute = (context) => {
+  const origin = requestOrigin(context);
   const body = `User-agent: *
 Allow: /
 Disallow: /admin
@@ -13,7 +15,7 @@ Disallow: /reset-password
 Disallow: /verify-email
 Disallow: /status
 
-Sitemap: ${new URL('/sitemap.xml', url.origin).toString()}
+Sitemap: ${new URL('/sitemap.xml', origin).toString()}
 `;
 
   return new Response(body, {

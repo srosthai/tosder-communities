@@ -108,8 +108,16 @@ test.describe.serial('Creator Studio', () => {
     await expect(row).toContainText(`Studio test ${stamp}`);
     await expect(row).toContainText('Draft');
 
+    await page.evaluate(() => {
+      (window as unknown as { __softStudio?: string }).__softStudio = 'kept';
+    });
     await row.getByRole('button', { name: 'Submit' }).click();
     await expect(page.getByText('Submitted for review.')).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __softStudio?: string }).__softStudio,
+      ),
+    ).toBe('kept');
     await expect(page.locator(`[data-template-id="${templateId}"]`)).toContainText('In review');
 
     await page.locator(`[data-template-id="${templateId}"]`).getByRole('button', { name: 'Duplicate' }).click();

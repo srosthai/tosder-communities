@@ -6,6 +6,7 @@ import DestinationCard from '../../components/public/DestinationCard.astro';
 import MapView from '../../components/public/MapView.astro';
 import EmptyState from '../../components/ui/EmptyState.astro';
 import { getContentAdmin } from '../../lib/admin-auth';
+import { requestOrigin } from '../../lib/request-origin';
 import { getDestinationBySlug, listRelatedDestinations } from '../../lib/destinations';
 
 export const prerender = false;
@@ -34,14 +35,15 @@ const coords =
     : null;
 
 const canonicalPath = destination ? `/destinations/${destination.slug}` : undefined;
+const origin = requestOrigin(Astro);
 const destinationJsonLd = destination && !isPreview
   ? {
       '@context': 'https://schema.org',
       '@type': 'TouristAttraction',
       name: destination.name,
       description: destination.description ?? destination.summary ?? undefined,
-      url: canonicalPath ? new URL(canonicalPath, Astro.url.origin).toString() : undefined,
-      image: new URL('/image/og-default.png', Astro.url.origin).toString(),
+      url: canonicalPath ? new URL(canonicalPath, origin).toString() : undefined,
+      image: new URL('/image/og-default.png', origin).toString(),
       address: {
         '@type': 'PostalAddress',
         addressLocality: destination.province,
