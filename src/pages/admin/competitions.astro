@@ -1,296 +1,317 @@
 ---
-import { ArrowUpRight, CalendarDays, Plus, Settings2 } from '@lucide/astro';
+import { CalendarDays, Check, Lock, Play, RefreshCw, Trophy, Wallet } from '@lucide/astro';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import PageHeader from '../../components/admin/PageHeader.astro';
-import Panel from '../../components/admin/Panel.astro';
 import Badge from '../../components/ui/Badge.astro';
 import Button from '../../components/ui/Button.astro';
-import Table from '../../components/ui/Table.astro';
+import { ApiError } from '../../lib/api';
+import { getAdministratorAccess } from '../../lib/admin-auth';
+import {
+  closeCompetition,
+  competitionStatusLabel,
+  createCompetition,
+  finalizeCompetition,
+  getCompetitionById,
+  listCompetitions,
+  publishCompetition,
+  recomputeLeaderboard,
+  updateCompetition,
+  type CompetitionInput,
+} from '../../lib/competitions';
+import { createRewardsFromFinal, rewardReconciliation } from '../../lib/rewards';
 
-const leaderboard = [
-  { rank: '01', creator: 'Sokha Meas', uses: '184', prize: '$200', status: 'Provisional' },
-  { rank: '02', creator: 'Vannak Heng', uses: '142', prize: '$120', status: 'Provisional' },
-  { rank: '03', creator: 'Dara Lim', uses: '117', prize: '$80', status: 'Provisional' },
-  { rank: '04', creator: 'Malis Chhay', uses: '96', prize: '$50', status: 'Provisional' },
-  { rank: '05', creator: 'Pisey Nou', uses: '81', prize: '$50', status: 'Provisional' },
-];
+export const prerender = false;
 
-const prizes = [
-  { label: '1st', amount: '$200' },
-  { label: '2nd', amount: '$120' },
-  { label: '3rd', amount: '$80' },
-  { label: '4th', amount: '$50' },
-  { label: '5th', amount: '$50' },
-];
+const { user, allowed } = await getAdministratorAccess(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+const notices = {
+  created: 'Competition draft created.',
+  updated: 'Competition updated and audited.',
+  published: 'Competition started.',
+  closed: 'Competition closed and a provisional snapshot was stored.',
+  finalized: 'Competition finalized. The final snapshot is now live.',
+  recomputed: 'Leaderboard snapshot recomputed.',
+};
+
+const errors = {
+  action_failed: 'The action could not be completed.',
+  invalid_transition: 'That lifecycle transition is not allowed.',
+  overlapping_competition: 'Another active competition covers those dates.',
+  validation_error: 'Check the competition fields and try again.',
+};
+
+function parseDateValue(value: string) {
+  if (!value) return null;
+  return value.length === 16 ? `${value}:00.000Z` : value;
+}
+
+function moneyToCents(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+}
+
+if (allowed && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const id = String(form.get('competitionId') ?? '');
+
+  try {
+    if (intent === 'create' || intent === 'update') {
+      const prizes = [1, 2, 3, 4, 5]
+        .map((rank) => ({ rank, amountCents: moneyToCents(String(form.get(`prize${rank}`) ?? '')) }))
+        .filter((prize) => prize.amountCents > 0);
+      const input: CompetitionInput = {
+        title: String(form.get('title') ?? ''),
+        slug: String(form.get('slug') ?? ''),
+        description: String(form.get('description') ?? ''),
+        rules: String(form.get('rules') ?? ''),
+        rulesUrl: String(form.get('rulesUrl') ?? ''),
+        timezone: String(form.get('timezone') ?? 'Asia/Phnom_Penh'),
+        startsAt: parseDateValue(String(form.get('startsAt') ?? '')),
+        endsAt: parseDateValue(String(form.get('endsAt') ?? '')),
+        prizePoolCents: moneyToCents(String(form.get('prizePool') ?? '')),
+        currency: String(form.get('currency') ?? 'USD'),
+        fundingSource: String(form.get('fundingSource') ?? ''),
+        prizes,
+      };
+      if (intent === 'create') {
+        const created = await createCompetition({ id: user.id, email: user.email }, input);
+        return Astro.redirect(`/admin/competitions?id=${created.id}&notice=created`);
+      }
+      await updateCompetition(
+        { id: user.id, email: user.email },
+        id,
+        input,
+        String(form.get('reason') ?? ''),
+      );
+      return Astro.redirect(`/admin/competitions?id=${id}&notice=updated`);
+    }
+
+    if (intent === 'publish') {
+      await publishCompetition({ id: user.id, email: user.email }, id);
+      return Astro.redirect(`/admin/competitions?id=${id}&notice=published`);
+    }
+    if (intent === 'close') {
+      await closeCompetition({ id: user.id, email: user.email }, id);
+      return Astro.redirect(`/admin/competitions?id=${id}&notice=closed`);
+    }
+    if (intent === 'finalize') {
+      await finalizeCompetition({ id: user.id, email: user.email }, id);
+      return Astro.redirect(`/admin/competitions?id=${id}&notice=finalized`);
+    }
+    if (intent === 'recompute') {
+      await recomputeLeaderboard(
+        { id: user.id, email: user.email },
+        id,
+        String(form.get('reason') ?? ''),
+      );
+      return Astro.redirect(`/admin/competitions?id=${id}&notice=recomputed`);
+    }
+    if (intent === 'rewards') {
+      await createRewardsFromFinal(id, { id: user.id, email: user.email });
+      return Astro.redirect(`/admin/rewards?competition=${id}`);
+    }
+  } catch (error) {
+    const code = error instanceof ApiError ? error.code : 'action_failed';
+    return Astro.redirect(`/admin/competitions?error=${code}`);
+  }
+}
+
+const competitions = allowed ? await listCompetitions() : [];
+const selectedId = Astro.url.searchParams.get('id');
+const selected = selectedId ? await getCompetitionById(selectedId) : null;
+const selectedPrizes = new Map((selected?.prizes ?? []).map((prize) => [prize.rank, prize.amountCents]));
+const reconciliation = selected ? await rewardReconciliation(selected.id) : null;
+const notice = Astro.url.searchParams.get('notice') as keyof typeof notices | null;
+const error = Astro.url.searchParams.get('error') as keyof typeof errors | null;
+
+const toLocalInput = (date: Date | null | undefined) => (date ? date.toISOString().slice(0, 16) : '');
+const formTitle = selected ? 'Edit competition' : 'Create competition';
+const titleValue = selected?.title ?? '';
+const slugValue = selected?.slug ?? '';
+const startsValue = toLocalInput(selected?.startsAt);
+const endsValue = toLocalInput(selected?.endsAt);
+const timezoneValue = selected?.timezone ?? 'Asia/Phnom_Penh';
+const fundingValue = selected?.fundingSource ?? '';
+const poolValue = selected?.prizePoolCents != null ? String(selected.prizePoolCents / 100) : '';
+const currencyValue = selected?.currency ?? 'USD';
+const descriptionValue = selected?.description ?? '';
+const rulesValue = selected?.rules ?? '';
+const rulesUrlValue = selected?.rulesUrl ?? '';
+const snapshotCount = selected?.snapshots.length ?? 0;
+const canEdit = selected ? selected.status !== 'FINALIZED' : true;
+const prizeValues = [1, 2, 3, 4, 5].map((rank) => {
+  const cents = selectedPrizes.get(rank);
+  return cents == null ? '' : String(cents / 100);
+});
 ---
 
 <AdminLayout title="Competitions">
   <PageHeader
     title="Competitions"
-    description="Configure the monthly Top 5, publish the rules before the period starts, and finalize results fairly."
+    description="Configure the monthly Top 5, publish rules before the period begins, and freeze results at close."
   >
-    <Button variant="secondary">
-      <CalendarDays size={15} stroke-width={1.75} />
-      Past competitions
-    </Button>
-    <Button variant="primary">
-      <Plus size={15} stroke-width={2} />
-      New competition
-    </Button>
+    <Badge variant="info" dot>{competitions.length} periods</Badge>
   </PageHeader>
 
-  <div class="competition-grid">
-    <Panel title="November 2026" description="Active · 21 of 30 days elapsed">
-      <Badge slot="action" variant="warning" dot>Provisional</Badge>
-      <div class="competition-facts">
-        <div>
-          <span>Period</span>
-          <strong>Nov 1 – Nov 30, 2026</strong>
-        </div>
-        <div>
-          <span>Timezone</span>
-          <strong>Asia/Phnom Penh</strong>
-        </div>
-        <div>
-          <span>Prize pool</span>
-          <strong>$500</strong>
-        </div>
-        <div>
-          <span>Funding source</span>
-          <strong>Platform budget</strong>
-        </div>
-      </div>
-      <div class="progress" role="img" aria-label="Competition period is 70 percent complete.">
-        <span class="progress__bar" style="--progress: 70%"></span>
-      </div>
-      <div class="competition-footer">
-        <span>Closes in 9 days</span>
-        <a class="panel-link" href="/admin/competitions?tab=rules">
-          View public rules <ArrowUpRight size={13} stroke-width={1.75} />
-        </a>
-      </div>
-    </Panel>
+  {notice && notices[notice] && <p class="notice notice--success" role="status">{notices[notice]}</p>}
+  {error && <p class="notice notice--error" role="alert">{errors[error] ?? errors.action_failed}</p>}
+  {!allowed && <p class="forbidden" role="alert">Administrator access required.</p>}
 
-    <Panel title="Prize configuration" description="Admin-configurable example pool">
-      <Button slot="action" variant="ghost" size="sm">
-        <Settings2 size={14} stroke-width={1.75} />
-        Edit
-      </Button>
-      <div class="prize-list">
-        {prizes.map((prize) => (
-          <div class="prize-row">
-            <span class="prize-rank">{prize.label}</span>
-            <span class="prize-amount">{prize.amount}</span>
+  {allowed && (
+    <div class="layout">
+      <aside class="periods">
+        <h2>Periods</h2>
+        {competitions.length === 0 && <p class="muted">No competitions yet.</p>}
+        {competitions.map((competition) => (
+          <a
+            class={competition.id === selected?.id ? 'period is-active' : 'period'}
+            href={`/admin/competitions?id=${competition.id}`}
+          >
+            <span class="period-copy">
+              <strong>{competition.title}</strong>
+              <span>{competition.startsAt?.toLocaleDateString('en', { month: 'short', day: 'numeric' })} – {competition.endsAt?.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </span>
+            <Badge
+              variant={competition.status === 'ACTIVE' ? 'success' : competition.status === 'FINALIZED' ? 'info' : competition.status === 'CLOSED' ? 'warning' : 'neutral'}
+              dot
+            >
+              {competitionStatusLabel[competition.status]}
+            </Badge>
+          </a>
+        ))}
+        <a class="new-link" href="/admin/competitions">+ New competition</a>
+      </aside>
+
+      <div class="main">
+        <form method="post" class="panel form">
+          <input type="hidden" name="intent" value={selected ? 'update' : 'create'} />
+          {selected && <input type="hidden" name="competitionId" value={selected.id} />}
+          <div class="heading">
+            <h2>{formTitle}</h2>
+            {selected && <Badge variant="neutral">{competitionStatusLabel[selected.status]}</Badge>}
           </div>
-        ))}
-      </div>
-      <div class="prize-total">
-        <span>Total prize pool</span>
-        <strong>$500</strong>
-      </div>
-      <p class="prize-note">Payouts are manual and require administrator approval.</p>
-    </Panel>
-  </div>
 
-  <Panel title="Provisional leaderboard" description="Ranked by qualified uses in the current period">
-    <a slot="action" class="panel-link" href="/admin/rewards">
-      Reward ledger <ArrowUpRight size={13} stroke-width={1.75} />
-    </a>
-    <Table>
-      <thead>
-        <tr>
-          <th scope="col">Rank</th>
-          <th scope="col">Creator</th>
-          <th scope="col">Qualified uses</th>
-          <th scope="col">Prize</th>
-          <th scope="col">Status</th>
-          <th scope="col"><span class="sr-only">Actions</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        {leaderboard.map((entry) => (
-          <tr>
-            <td><span class="rank">{entry.rank}</span></td>
-            <td><strong>{entry.creator}</strong></td>
-            <td class="numeric">{entry.uses}</td>
-            <td class="numeric">{entry.prize}</td>
-            <td><Badge variant="warning">{entry.status}</Badge></td>
-            <td class="actions"><a class="table-action" href={`/admin/competitions?creator=${entry.creator.toLowerCase().replaceAll(' ', '-')}`}>View</a></td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
-  </Panel>
+          <div class="grid">
+            <label class="field"><span>Title</span><input name="title" required maxlength="160" value={titleValue} /></label>
+            <label class="field"><span>Slug</span><input name="slug" maxlength="90" value={slugValue} /></label>
+            <label class="field"><span>Starts at (UTC)</span><input type="datetime-local" name="startsAt" required value={startsValue} /></label>
+            <label class="field"><span>Ends at (UTC)</span><input type="datetime-local" name="endsAt" required value={endsValue} /></label>
+            <label class="field"><span>Timezone label</span><input name="timezone" value={timezoneValue} /></label>
+            <label class="field"><span>Funding source</span><input name="fundingSource" value={fundingValue} /></label>
+            <label class="field"><span>Prize pool (USD)</span><input type="number" min="0" step="1" name="prizePool" value={poolValue} /></label>
+            <label class="field"><span>Currency</span><input name="currency" maxlength="3" value={currencyValue} /></label>
+          </div>
 
-  <p class="page-note">Rankings freeze at close. Late events follow the documented correction process.</p>
+          <label class="field"><span>Description</span><textarea name="description" rows="2" maxlength="2000">{descriptionValue}</textarea></label>
+          <label class="field"><span>Rules</span><textarea name="rules" rows="6" maxlength="12000">{rulesValue}</textarea></label>
+          <label class="field"><span>Public rules URL</span><input name="rulesUrl" value={rulesUrlValue} /></label>
+
+          <fieldset class="prizes">
+            <legend>Prizes (USD)</legend>
+            <div class="prize-grid">
+              {[1, 2, 3, 4, 5].map((rank) => (
+                <label class="field">
+                  <span>Rank {rank}</span>
+                  <input type="number" min="0" step="1" name={'prize' + rank} value={prizeValues[rank - 1]} />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {selected && selected.status !== 'DRAFT' && (
+            <label class="field"><span>Reason for changes after start</span><input name="reason" required minlength="3" maxlength="300" /></label>
+          )}
+
+          <div class="actions">
+            <Button type="submit" variant="primary" disabled={!canEdit}>{selected ? 'Save configuration' : 'Create draft'}</Button>
+            {selected && <a class="text-link" href={`/competitions/${selected.slug}`} target="_blank" rel="noreferrer">View public rules</a>}
+          </div>
+        </form>
+
+        {selected && (
+          <section class="panel lifecycle">
+            <h2>Lifecycle</h2>
+            <div class="lifecycle-actions">
+              {selected.status === 'DRAFT' && (
+                <form method="post"><input type="hidden" name="intent" value="publish" /><input type="hidden" name="competitionId" value={selected.id} /><Button type="submit" variant="primary"><Play size={14} stroke-width={1.75} />Start</Button></form>
+              )}
+              {selected.status === 'ACTIVE' && (
+                <form method="post"><input type="hidden" name="intent" value="close" /><input type="hidden" name="competitionId" value={selected.id} /><Button type="submit" variant="secondary"><Lock size={14} stroke-width={1.75} />Close and freeze</Button></form>
+              )}
+              {selected.status === 'CLOSED' && (
+                <form method="post"><input type="hidden" name="intent" value="finalize" /><input type="hidden" name="competitionId" value={selected.id} /><Button type="submit" variant="primary"><Check size={14} stroke-width={1.75} />Finalize</Button></form>
+              )}
+              {selected.status === 'FINALIZED' && (
+                <form method="post"><input type="hidden" name="intent" value="rewards" /><input type="hidden" name="competitionId" value={selected.id} /><Button type="submit" variant="primary"><Wallet size={14} stroke-width={1.75} />Create rewards</Button></form>
+              )}
+              {selected.status !== 'DRAFT' && selected.status !== 'FINALIZED' && (
+                <form method="post" class="recompute"><input type="hidden" name="intent" value="recompute" /><input type="hidden" name="competitionId" value={selected.id} /><input name="reason" required minlength="3" maxlength="300" placeholder="Reason for recompute" /><Button type="submit" variant="secondary"><RefreshCw size={14} stroke-width={1.75} />Recompute</Button></form>
+              )}
+            </div>
+            <p class="meta-line">
+              <CalendarDays size={13} stroke-width={1.75} />
+              Snapshot versions: {snapshotCount}.
+              {selected.publishedAt ? ` Started ${selected.publishedAt.toLocaleDateString('en')}.` : ''}
+              {selected.finalizedAt ? ` Finalized ${selected.finalizedAt.toLocaleDateString('en')}.` : ''}
+            </p>
+            {reconciliation && (
+              <p class={reconciliation.matches ? 'reconcile' : 'reconcile bad'}>
+                <Trophy size={13} stroke-width={1.75} />
+                Prize total {reconciliation.prizeTotal / 100} · reward total {reconciliation.rewardTotal / 100}
+                {reconciliation.matches ? ' · reconciled' : ' · mismatch'}
+              </p>
+            )}
+          </section>
+        )}
+      </div>
+    </div>
+  )}
 </AdminLayout>
 
 <style>
-  .competition-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
-    align-items: start;
-  }
-
-  .competition-facts {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-3);
-    padding-bottom: var(--space-4);
-  }
-
-  .competition-facts span {
-    display: block;
-    margin-bottom: 2px;
-    color: var(--color-text-subtle);
-    font-size: var(--text-xs);
-  }
-
-  .competition-facts strong {
-    font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
-  }
-
-  .progress {
-    height: 4px;
-    border-radius: var(--radius-full);
-    background: var(--color-surface-sunken);
-    overflow: hidden;
-  }
-
-  .progress__bar {
-    display: block;
-    width: var(--progress);
-    height: 100%;
-    border-radius: inherit;
-    background: var(--chart-3);
-  }
-
-  .competition-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    margin-top: var(--space-2);
-    color: var(--color-text-subtle);
-    font-size: var(--text-xs);
-  }
-
-  .panel-link {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    color: var(--color-text-muted);
-    font-size: var(--text-xs);
-    white-space: nowrap;
-  }
-
-  .panel-link:hover {
-    color: var(--color-text);
-  }
-
-  .prize-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .prize-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 1.75rem;
-    padding: 0 var(--space-2);
-    border-bottom: var(--border-width) solid var(--color-border);
-    font-size: var(--text-xs);
-  }
-
-  .prize-row:last-child {
-    border-bottom: 0;
-  }
-
-  .prize-rank {
-    color: var(--color-text-muted);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-  }
-
-  .prize-amount {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .prize-total {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: var(--space-2);
-    padding-top: var(--space-3);
-    border-top: var(--border-width) solid var(--color-border);
-    font-size: var(--text-xs);
-  }
-
-  .prize-total strong {
-    font-size: var(--text-md);
-    font-weight: var(--weight-semibold);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .prize-note {
-    margin-top: var(--space-2);
-    color: var(--color-text-subtle);
-    font-size: var(--text-xs);
-    line-height: var(--leading-relaxed);
-  }
-
-  .rank {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.25rem;
-    height: 1.25rem;
-    border-radius: var(--radius-sm);
-    background: var(--color-surface-sunken);
-    color: var(--color-text-muted);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-  }
-
-  .numeric {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .actions {
-    text-align: right;
-  }
-
-  .table-action {
-    color: var(--color-text-muted);
+  .notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
     font-size: var(--text-sm);
   }
-
-  .table-action:hover {
-    color: var(--color-text);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .page-note {
-    margin-top: var(--space-3);
-    color: var(--color-text-subtle);
-    font-size: var(--text-xs);
-  }
-
-  @media (max-width: 1100px) {
-    .competition-grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  @media (max-width: 600px) {
-    .competition-facts {
-      grid-template-columns: minmax(0, 1fr);
-    }
+  .notice--success { background: var(--color-success-bg); color: var(--color-success-text); border-color: color-mix(in oklch, var(--color-success) 40%, transparent); }
+  .notice--error { background: var(--color-danger-bg); color: var(--color-danger-text); border-color: color-mix(in oklch, var(--color-danger) 40%, transparent); }
+  .forbidden { padding: var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg-subtle); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .layout { display: grid; grid-template-columns: minmax(15rem, 0.6fr) minmax(0, 1.4fr); gap: var(--space-3); align-items: start; }
+  .periods, .panel { padding: var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+  .periods h2, .panel h2 { margin-bottom: var(--space-3); font-size: var(--text-md); font-weight: var(--weight-semibold); }
+  .period { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border-radius: var(--radius-sm); }
+  .period:hover, .period.is-active { background: var(--color-surface-sunken); }
+  .period-copy { display: flex; flex-direction: column; gap: 2px; }
+  .period-copy strong { color: var(--color-text); font-size: var(--text-sm); }
+  .period-copy span { color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .new-link { display: block; margin-top: var(--space-2); padding-top: var(--space-2); border-top: var(--border-width) solid var(--color-border); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .main { display: flex; flex-direction: column; gap: var(--space-3); }
+  .form { display: flex; flex-direction: column; gap: var(--space-3); }
+  .heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+  .field { display: flex; flex-direction: column; gap: var(--space-1); }
+  .field span { color: var(--color-text-muted); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+  .field input, .field textarea { width: 100%; padding: var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); font-size: var(--text-sm); }
+  .prizes { margin: 0; padding: 0; border: 0; }
+  .prizes legend { margin-bottom: var(--space-2); color: var(--color-text-muted); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+  .prize-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); }
+  .actions { display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: var(--border-width) solid var(--color-border); }
+  .text-link { color: var(--color-text-muted); font-size: var(--text-xs); text-decoration: underline; text-underline-offset: 2px; }
+  .lifecycle-actions { display: flex; align-items: flex-end; gap: var(--space-2); flex-wrap: wrap; }
+  .lifecycle-actions form { display: flex; align-items: flex-end; gap: var(--space-2); }
+  .recompute input { height: var(--control-height-sm); padding: 0 var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font-size: var(--text-sm); }
+  .meta-line, .reconcile { display: flex; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-3); color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .reconcile.bad { color: var(--color-danger-text); }
+  .muted { color: var(--color-text-subtle); font-size: var(--text-sm); }
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .grid, .prize-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 </style>

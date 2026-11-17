@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Clock, Download, MapPin, Share2, Wallet } from '
 import PublicLayout from '../../layouts/PublicLayout.astro';
 import PublicButton from '../../components/public/PublicButton.astro';
 import LikeButton from '../../components/public/LikeButton.astro';
+import ReportButton from '../../components/public/ReportButton.astro';
 import SaveButton from '../../components/public/SaveButton.astro';
 import TemplateCard from '../../components/public/TemplateCard.astro';
 import MapView from '../../components/public/MapView.astro';
@@ -202,6 +203,14 @@ const jsonLd =
                 <Share2 size={15} stroke-width={1.75} />
                 Share
               </button>
+              {user && (
+                <ReportButton
+                  type="TEMPLATE"
+                  id={template.id}
+                  signedIn={Boolean(user)}
+                  redirectTo={`/templates/${template.slug}`}
+                />
+              )}
               <span class="action-note">Copying creates your own trip. The template stays unchanged.</span>
             </div>
 

@@ -213,6 +213,17 @@ test.describe.serial('engagement, usage, and analytics', () => {
     await prisma.usageEvent.deleteMany({
       where: { userId: member.userId, templateId: template.id, periodKey: month },
     });
+    await prisma.engagementEvent.deleteMany({
+      where: {
+        templateId: template.id,
+        eventType: 'USE_STARTED',
+        userId: member.userId,
+      },
+    });
+    await prisma.travelTemplate.update({
+      where: { id: template.id },
+      data: { useStartedCount: 0 },
+    });
 
     await page.goto(`/trips/new?template=${template.id}&version=${template.publishedVersion!.id}`);
     await page.goto(`/trips/new?template=${template.id}&version=${template.publishedVersion!.id}`);

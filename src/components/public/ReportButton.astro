@@ -1,0 +1,76 @@
+---
+import { Flag } from '@lucide/astro';
+
+interface Props {
+  type: 'TEMPLATE' | 'REVIEW' | 'USER';
+  id: string;
+  signedIn: boolean;
+  redirectTo: string;
+}
+
+const { type, id, signedIn, redirectTo } = Astro.props;
+---
+
+{signedIn ? (
+  <button
+    type="button"
+    class="report-button"
+    data-report-button
+    data-report-type={type}
+    data-report-id={id}
+  >
+    <Flag size={13} stroke-width={1.75} aria-hidden="true" />
+    Report
+  </button>
+) : (
+  <a class="report-button" href={`/sign-in?redirectTo=${encodeURIComponent(redirectTo)}`}>
+    <Flag size={13} stroke-width={1.75} aria-hidden="true" />
+    Report
+  </a>
+)}
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-report-button]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const reason = window.prompt('Why are you reporting this?');
+      if (!reason?.trim()) return;
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/reports', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            targetType: button.dataset.reportType,
+            targetId: button.dataset.reportId,
+            reasonCode: 'other',
+            details: reason,
+          }),
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Could not submit the report.');
+        button.textContent = 'Reported';
+      } catch {
+        button.disabled = false;
+      }
+    });
+  });
+</script>
+
+<style>
+  .report-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .report-button:hover {
+    color: var(--color-text);
+  }
+</style>

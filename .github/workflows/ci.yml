@@ -70,6 +70,9 @@ jobs:
       - name: Verify trip schema constraints
         run: npm run db:trip-check
 
+      - name: Verify row-level security policies
+        run: npm run db:rls-check
+
       - name: Type and Astro checks
         run: npm run check
 

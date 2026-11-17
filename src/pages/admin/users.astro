@@ -1,170 +1,271 @@
 ---
-import { ChevronDown, Download, Plus, Users } from '@lucide/astro';
+import { ShieldCheck, UserCog } from '@lucide/astro';
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import DataTable from '../../components/admin/DataTable.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
 import Badge from '../../components/ui/Badge.astro';
 import Button from '../../components/ui/Button.astro';
+import { getAdministratorAccess } from '../../lib/admin-auth';
+import { getPrisma } from '../../db/prisma';
+import { roleLabels } from '../../lib/permissions';
 
-const members = [
-  { name: 'Sokha Meas', email: 'sokha@example.com', role: 'Creator', status: 'Active', templates: '8', uses: '412', joined: 'Mar 2026', initials: 'SM' },
-  { name: 'Dara Lim', email: 'dara@example.com', role: 'Creator', status: 'Active', templates: '5', uses: '208', joined: 'Apr 2026', initials: 'DL' },
-  { name: 'Vannak Heng', email: 'vannak@example.com', role: 'Trusted creator', status: 'Active', templates: '11', uses: '536', joined: 'Feb 2026', initials: 'VH' },
-  { name: 'Malis Chhay', email: 'malis@example.com', role: 'Creator', status: 'Invited', templates: '0', uses: '—', joined: 'Nov 2026', initials: 'MC' },
-  { name: 'Pisey Nou', email: 'pisey@example.com', role: 'Creator', status: 'Active', templates: '3', uses: '147', joined: 'Jun 2026', initials: 'PN' },
-  { name: 'Ratha Keo', email: 'ratha@example.com', role: 'Moderator', status: 'Suspended', templates: '0', uses: '—', joined: 'Jan 2026', initials: 'RK' },
-  { name: 'Bopha Sok', email: 'bopha@example.com', role: 'Creator', status: 'Active', templates: '2', uses: '96', joined: 'Jul 2026', initials: 'BS' },
-  { name: 'Chanthou Ith', email: 'chanthou@example.com', role: 'Creator', status: 'Active', templates: '4', uses: '188', joined: 'Aug 2026', initials: 'CI' },
-  { name: 'Sovann Reach', email: 'sovann@example.com', role: 'Moderator', status: 'Active', templates: '0', uses: '—', joined: 'Sep 2026', initials: 'SR' },
-  { name: 'Nary Phan', email: 'nary@example.com', role: 'Creator', status: 'Invited', templates: '0', uses: '—', joined: 'Nov 2026', initials: 'NP' },
-  { name: 'Kosal Tan', email: 'kosal@example.com', role: 'Creator', status: 'Active', templates: '1', uses: '42', joined: 'Oct 2026', initials: 'KT' },
-];
+export const prerender = false;
 
-const roleVariant = (role: string) =>
-  role === 'Moderator' || role === 'Trusted creator' ? 'info' : 'neutral';
+const { user, allowed } = await getAdministratorAccess(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
 
-const statusVariant = (status: string) =>
-  status === 'Active' ? 'success' : status === 'Invited' ? 'warning' : 'danger';
+const roles = ['MEMBER', 'TRUSTED_CREATOR', 'MODERATOR', 'ADMINISTRATOR'] as const;
+let errorMessage: string | null = null;
+
+if (allowed && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const userId = String(form.get('userId') ?? '');
+  const role = String(form.get('role') ?? '');
+  const reason = String(form.get('reason') ?? '').trim();
+
+  if (intent === 'set-role' && roles.includes(role as never) && userId && reason.length >= 3) {
+    const profile = await getPrisma().memberProfile.findUnique({ where: { userId } });
+    if (profile) {
+      await getPrisma().$transaction(async (tx) => {
+        await tx.memberProfile.update({
+          where: { userId },
+          data: {
+            role: role as (typeof roles)[number],
+            trustedCreator: role === 'TRUSTED_CREATOR' || role === 'ADMINISTRATOR',
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            actorId: user.id,
+            actorEmail: user.email,
+            action: 'user.role_changed',
+            entityType: 'member_profile',
+            entityId: userId,
+            summary: `Changed ${profile.username} from ${profile.role} to ${role}`,
+            metadata: { before: profile.role, after: role, reason },
+          },
+        });
+      });
+      return Astro.redirect('/admin/users?notice=role');
+    }
+  }
+  errorMessage = 'Choose a role and add a reason of at least 3 characters.';
+}
+
+const profiles = allowed
+  ? await getPrisma().memberProfile.findMany({
+      orderBy: [{ role: 'desc' }, { createdAt: 'asc' }],
+      include: {
+        _count: { select: { templates: true, trips: true } },
+      },
+    })
+  : [];
+
+const notice = Astro.url.searchParams.get('notice');
 ---
 
 <AdminLayout title="Users">
-  <DataTable
-    title="Members"
-    description="Manage members, creator trust levels, and moderator access."
-    searchPlaceholder="Search members by name or email…"
-    filters={[
-      { label: 'Active', value: 'active' },
-      { label: 'Invited', value: 'invited' },
-      { label: 'Suspended', value: 'suspended' },
-      { label: 'Moderator', value: 'moderator' },
-      { label: 'Trusted creator', value: 'trusted-creator' },
-    ]}
+  <PageHeader
+    title="People and roles"
+    description="Roles are enforced on the server. UI navigation only reflects what the API will allow."
   >
-    <Users slot="icon" size={18} stroke-width={1.75} />
-    <Fragment slot="actions">
-      <Button variant="secondary" size="sm">
-        <Download size={14} stroke-width={1.75} />
-        Export
-      </Button>
-      <Button variant="primary" size="sm">
-        <Plus size={14} stroke-width={2} />
-        Invite member
-      </Button>
-    </Fragment>
+    <Badge variant="info" dot>{profiles.length} profiles</Badge>
+  </PageHeader>
 
-    <thead>
-      <tr>
-        <th scope="col">Member</th>
-        <th scope="col">Email</th>
-        <th scope="col">Role</th>
-        <th scope="col">Status</th>
-        <th scope="col">Templates</th>
-        <th scope="col">Qualified uses</th>
-        <th scope="col">Joined</th>
-        <th scope="col"><span class="sr-only">Actions</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      {members.map((member) => (
-        <tr
-          data-search={`${member.name} ${member.email} ${member.role} ${member.status}`}
-          data-filter={`${member.status.toLowerCase()} ${member.role.toLowerCase().replaceAll(' ', '-')}`}
-        >
-          <td>
-            <span class="cell-main">
-              <span class="member-avatar" aria-hidden="true">{member.initials}</span>
-              <span class="cell-copy">
-                <strong>{member.name}</strong>
-                <span>{member.role}</span>
-              </span>
-            </span>
-          </td>
-          <td class="muted">{member.email}</td>
-          <td><Badge variant={roleVariant(member.role)}>{member.role}</Badge></td>
-          <td><Badge variant={statusVariant(member.status)} dot>{member.status}</Badge></td>
-          <td class="numeric">{member.templates}</td>
-          <td class="numeric">{member.uses}</td>
-          <td class="muted">{member.joined}</td>
-          <td class="actions">
-            <a class="table-action" href={`/admin/users?member=${member.initials.toLowerCase()}`}>
-              Manage <ChevronDown size={12} stroke-width={1.75} />
-            </a>
-          </td>
-        </tr>
+  {notice === 'role' && <p class="notice notice--success" role="status">Role updated and audited.</p>}
+  {errorMessage && <p class="notice notice--error" role="alert">{errorMessage}</p>}
+
+  {!allowed ? (
+    <p class="forbidden" role="alert">Administrator access required.</p>
+  ) : (
+    <div class="user-list">
+      {profiles.map((profile) => (
+        <article class="user-row">
+          <div class="user-copy">
+            <div class="user-head">
+              <strong>{profile.displayName}</strong>
+              <span>@{profile.username}</span>
+              <Badge
+                variant={
+                  profile.role === 'ADMINISTRATOR'
+                    ? 'danger'
+                    : profile.role === 'MODERATOR'
+                      ? 'warning'
+                      : profile.role === 'TRUSTED_CREATOR'
+                        ? 'success'
+                        : 'neutral'
+                }
+                dot
+              >
+                {roleLabels[profile.role]}
+              </Badge>
+              {profile.suspendedAt && <Badge variant="danger">Suspended</Badge>}
+            </div>
+            <p class="user-meta">
+              {profile._count.templates} templates · {profile._count.trips} trips · joined{' '}
+              {profile.createdAt.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {profile.trustedCreator ? ' · trusted publishing flag on' : ''}
+            </p>
+          </div>
+
+          <form method="post" class="role-form">
+            <input type="hidden" name="intent" value="set-role" />
+            <input type="hidden" name="userId" value={profile.userId} />
+            <label>
+              <span>Role</span>
+              <select name="role" aria-label={`Role for ${profile.displayName}`}>
+                {roles.map((role) => (
+                  <option value={role} selected={profile.role === role}>{roleLabels[role]}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Reason</span>
+              <input name="reason" required minlength="3" maxlength="300" placeholder="Why is this changing?" />
+            </label>
+            <Button type="submit" variant="secondary" size="sm">
+              <UserCog size={14} stroke-width={1.75} />
+              Update
+            </Button>
+          </form>
+        </article>
       ))}
-    </tbody>
-  </DataTable>
+    </div>
+  )}
 
-  <p class="page-note">Role changes are recorded in the audit log. Moderators cannot approve payouts.</p>
+  <p class="permission-note">
+    <ShieldCheck size={13} stroke-width={1.75} />
+    Permission matrix: members can plan trips; trusted creators can publish directly; moderators review
+    templates and reports; administrators manage roles, competitions, rewards, and the audit log.
+  </p>
 </AdminLayout>
 
 <style>
-  .cell-main {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    min-width: 12rem;
+  .notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
   }
 
-  .member-avatar {
-    display: inline-grid;
-    place-items: center;
-    width: 1.75rem;
-    height: 1.75rem;
-    flex: none;
-    border-radius: var(--radius-full);
-    background: var(--color-surface-sunken);
+  .notice--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  }
+
+  .notice--error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  }
+
+  .forbidden {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
     color: var(--color-text-muted);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-semibold);
+    font-size: var(--text-sm);
   }
 
-  .cell-copy {
+  .user-list {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: var(--space-2);
+  }
+
+  .user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .user-copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
     min-width: 0;
   }
 
-  .cell-copy strong {
-    font-size: var(--text-md);
-    font-weight: var(--weight-medium);
-  }
-
-  .cell-copy span {
-    color: var(--color-text-subtle);
-    font-size: var(--text-xs);
-  }
-
-  .numeric {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .muted {
-    color: var(--color-text-muted);
-  }
-
-  .actions {
-    text-align: right;
-  }
-
-  .table-action {
-    display: inline-flex;
+  .user-head {
+    display: flex;
     align-items: center;
-    gap: var(--space-1);
-    color: var(--color-text-muted);
-    font-size: var(--text-sm);
-    white-space: nowrap;
+    gap: var(--space-2);
+    flex-wrap: wrap;
   }
 
-  .table-action:hover {
-    color: var(--color-text);
-    text-decoration: underline;
-    text-underline-offset: 2px;
+  .user-head strong {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
   }
 
-  .page-note {
-    margin-top: var(--space-3);
+  .user-head span {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .user-meta {
     color: var(--color-text-subtle);
     font-size: var(--text-xs);
+  }
+
+  .role-form {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .role-form label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .role-form label span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .role-form select,
+  .role-form input {
+    height: var(--control-height-sm);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .role-form input {
+    width: 12rem;
+  }
+
+  .permission-note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+  }
+
+  @media (max-width: 900px) {
+    .user-row {
+      align-items: flex-start;
+      flex-direction: column;
+    }
   }
 </style>

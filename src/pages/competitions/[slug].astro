@@ -1,0 +1,134 @@
+---
+import { ArrowLeft, CalendarDays, Globe2, Trophy } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import PublicButton from '../../components/public/PublicButton.astro';
+import Badge from '../../components/ui/Badge.astro';
+import { competitionStatusLabel, getCompetitionBySlug } from '../../lib/competitions';
+
+export const prerender = false;
+
+const competition = await getCompetitionBySlug(Astro.params.slug ?? '');
+if (!competition || competition.status === 'DRAFT') {
+  Astro.response.status = 404;
+}
+
+const status = competition ? competitionStatusLabel[competition.status] : '';
+const money = (cents: number, currency: string) =>
+  new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(cents / 100);
+const formatDate = (date: Date | null | undefined) =>
+  date ? date.toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '—';
+---
+
+{competition ? (
+  <PublicLayout
+    title={`${competition.title} rules — Tosder Communities`}
+    description={`Rules, eligibility, prizes, and dates for ${competition.title}.`}
+    canonical={`/competitions/${competition.slug}`}
+    type="article"
+  >
+    <article class="competition-page">
+      <div class="container">
+        <a class="back-link" href="/leaderboard">
+          <ArrowLeft size={14} stroke-width={1.75} />
+          Leaderboard
+        </a>
+        <header class="header">
+          <div class="badges">
+            <Badge variant={competition.status === 'FINALIZED' ? 'success' : 'warning'} dot>{status}</Badge>
+            <span class="timezone"><Globe2 size={13} stroke-width={1.75} /> {competition.timezone}</span>
+          </div>
+          <h1>{competition.title}</h1>
+          <p class="lede">{competition.description}</p>
+          <div class="dates">
+            <span><CalendarDays size={14} stroke-width={1.75} /> {formatDate(competition.startsAt)} – {formatDate(competition.endsAt)}</span>
+          </div>
+        </header>
+
+        <div class="layout">
+          <section class="prose" aria-labelledby="rules-heading">
+            <h2 id="rules-heading">Official rules</h2>
+            {competition.rules ? (
+              <p class="rules-text">{competition.rules}</p>
+            ) : (
+              <p>Rules will be published before the period starts.</p>
+            )}
+            {competition.rulesUrl && (
+              <p><a class="external-link" href={competition.rulesUrl} target="_blank" rel="noreferrer">Official rules document</a></p>
+            )}
+          </section>
+
+          <aside class="side" aria-label="Prizes and dates">
+            <section class="card">
+              <h2><Trophy size={15} stroke-width={1.75} /> Prizes</h2>
+              {competition.prizes.length === 0 ? (
+                <p class="muted">Prize details will be confirmed.</p>
+              ) : (
+                <dl>
+                  {competition.prizes.map((prize) => (
+                    <div>
+                      <dt>Rank {prize.rank}</dt>
+                      <dd>{money(prize.amountCents, competition.currency)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              <p class="muted">Funding source: {competition.fundingSource ?? 'to be confirmed'}.</p>
+              <p class="muted">Prize figures are illustrative until the pool is funded.</p>
+            </section>
+            <section class="card">
+              <h2>Eligibility summary</h2>
+              <ul>
+                <li>Signed-in traveler with a successful copied trip.</li>
+                <li>One qualified use per traveler, template, and competition month.</li>
+                <li>Self-use and invalid uses do not count.</li>
+                <li>Ties break on earlier completion of the same total.</li>
+              </ul>
+            </section>
+            <PublicButton href="/leaderboard">See the leaderboard</PublicButton>
+          </aside>
+        </div>
+      </div>
+    </article>
+  </PublicLayout>
+) : (
+  <PublicLayout title="Competition not found — Tosder Communities" noindex>
+    <section class="not-found">
+      <div class="container">
+        <p class="label">Error 404</p>
+        <h1>Competition not found.</h1>
+        <p>This period does not exist or has not been published.</p>
+        <PublicButton href="/leaderboard">Back to the leaderboard</PublicButton>
+      </div>
+    </section>
+  </PublicLayout>
+)}
+
+<style>
+  .competition-page { padding: clamp(var(--space-6), 6vw, 4rem) 0 clamp(var(--space-10), 8vw, 6rem); }
+  .container { width: min(100% - var(--space-8), 68rem); margin: 0 auto; }
+  .back-link { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .header { margin: var(--space-5) 0 var(--space-6); padding-bottom: var(--space-5); border-bottom: var(--border-width) solid var(--color-border); }
+  .badges { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+  .timezone { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); }
+  h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: var(--weight-semibold); letter-spacing: -0.05em; line-height: 1.05; }
+  .lede { max-width: 60ch; margin-top: var(--space-2); color: var(--color-text-muted); font-size: var(--text-lg); }
+  .dates { display: flex; gap: var(--space-3); margin-top: var(--space-3); color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .dates span { display: inline-flex; align-items: center; gap: var(--space-1); }
+  .layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(17rem, 0.7fr); gap: var(--space-6); align-items: start; }
+  .prose h2 { margin-bottom: var(--space-3); font-size: var(--text-lg); font-weight: var(--weight-semibold); }
+  .rules-text { white-space: pre-line; color: var(--color-text-muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+  .external-link { color: var(--color-text); font-size: var(--text-sm); text-decoration: underline; text-underline-offset: 2px; }
+  .side { display: flex; flex-direction: column; gap: var(--space-3); }
+  .card { padding: var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+  .card h2 { display: flex; align-items: center; gap: var(--space-1); margin-bottom: var(--space-3); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+  .card dl { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; }
+  .card dl div { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); }
+  .card dt { color: var(--color-text-subtle); }
+  .card dd { margin: 0; font-family: var(--font-mono); }
+  .card ul { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding-left: var(--space-4); color: var(--color-text-muted); font-size: var(--text-xs); line-height: var(--leading-relaxed); }
+  .muted { margin-top: var(--space-2); color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .not-found { padding: var(--space-10) 0; }
+  .not-found h1 { margin: var(--space-2) 0; font-size: var(--text-2xl); }
+  .not-found p { margin-bottom: var(--space-4); color: var(--color-text-muted); font-size: var(--text-sm); }
+  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+</style>

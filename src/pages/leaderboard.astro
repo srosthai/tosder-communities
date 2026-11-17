@@ -1,23 +1,562 @@
 ---
-import { Trophy } from '@lucide/astro';
+import { ArrowRight, CalendarDays, Clock, Trophy } from '@lucide/astro';
 import PublicPage from '../components/public/PublicPage.astro';
 import PublicButton from '../components/public/PublicButton.astro';
 import Badge from '../components/ui/Badge.astro';
 import EmptyState from '../components/ui/EmptyState.astro';
+import {
+  competitionStatusLabel,
+  getCurrentCompetition,
+  getLeaderboardForCompetition,
+  getPastCompetitions,
+} from '../lib/competitions';
+
+export const prerender = false;
+
+Astro.response.headers.set('cache-control', 'public, max-age=60');
+
+const competition = await getCurrentCompetition();
+const current = competition ? await getLeaderboardForCompetition(competition.id) : null;
+const past = await getPastCompetitions(6);
+
+const formatDate = (date: Date | null | undefined) =>
+  date
+    ? date.toLocaleDateString('en', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '—';
+
+const money = (cents: number, currency: string) =>
+  new Intl.NumberFormat('en', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(cents / 100);
 ---
 
 <PublicPage
   label="Leaderboard"
   title="The monthly Top 5."
-  description="Creators rank by qualified uses, not views or saves. The first competition starts after the platform opens."
+  description="Creators earn qualified uses when travelers copy their published templates into real trips. Invalid, self, and duplicate uses do not count."
 >
-  <Badge slot="actions" variant="info">Starts after launch</Badge>
+  {!current ? (
+    <EmptyState
+      title="The first competition is being prepared"
+      description="Rules and prizes will be published before the period starts. In the meantime, explore templates and start planning."
+    >
+      <Trophy slot="icon" size={20} stroke-width={1.75} />
+      <PublicButton href="/templates">Browse templates</PublicButton>
+      <PublicButton href="/explore" variant="secondary">Explore destinations</PublicButton>
+    </EmptyState>
+  ) : (
+    <>
+      <section class="period" aria-labelledby="period-heading">
+        <div class="period-copy">
+          <div class="period-badges">
+            <Badge
+              variant={current.competition.status === 'FINALIZED' ? 'success' : 'warning'}
+              dot
+            >
+              {current.competition.status === 'FINALIZED'
+                ? 'Final result'
+                : competitionStatusLabel[current.competition.status] + ' · provisional'}
+            </Badge>
+            <span class="period-timezone">{current.competition.timezone}</span>
+          </div>
+          <h2 id="period-heading">{current.competition.title}</h2>
+          <p>{current.competition.description}</p>
+          <div class="period-dates">
+            <span><CalendarDays size={14} stroke-width={1.75} /> {formatDate(current.competition.startsAt)} – {formatDate(current.competition.endsAt)}</span>
+            {current.competition.status === 'ACTIVE' && current.competition.endsAt && (
+              <span><Clock size={14} stroke-width={1.75} /> Ends {formatDate(current.competition.endsAt)}</span>
+            )}
+          </div>
+        </div>
+        <div class="period-side">
+          <p class="prize-label">Prize pool</p>
+          <p class="prize-total">
+            {current.competition.prizePoolCents != null
+              ? money(current.competition.prizePoolCents, current.competition.currency)
+              : 'To be confirmed'}
+          </p>
+          <a class="rules-link" href={`/competitions/${current.competition.slug}`}>
+            Read the rules
+            <ArrowRight size={12} stroke-width={2} />
+          </a>
+        </div>
+      </section>
 
-  <EmptyState
-    title="No competition is active yet"
-    description="Published rules, funded prizes, and a frozen ranking snapshot will appear here when the first period opens."
-  >
-    <Trophy slot="icon" size={20} stroke-width={1.75} />
-    <PublicButton href="/">Back to home</PublicButton>
-  </EmptyState>
+      {current.competition.status !== 'FINALIZED' && (
+        <p class="provisional-note">
+          Provisional rankings update as qualified uses are recorded. The final Top 5 is frozen and
+          approved after the period closes.
+        </p>
+      )}
+
+      <section class="top-five" aria-labelledby="top-five-heading">
+        <div class="section-heading">
+          <h2 id="top-five-heading">Top 5</h2>
+          <span>{current.entries.length} creators ranked</span>
+        </div>
+        {current.entries.length === 0 ? (
+          <div class="empty-rank">
+            <p>No qualified uses yet.</p>
+            <span>Copy a published template into a trip to enter the ranking.</span>
+          </div>
+        ) : (
+          <ol class="rank-list">
+            {current.entries.slice(0, 5).map((entry) => (
+              <li class:list={['rank-row', { 'is-tied': entry.tiedWithPrevious }]}>
+                <span class="rank-number">{entry.rank}</span>
+                <a class="rank-creator" href={`/creators/${entry.username}`}>
+                  {entry.avatarUrl ? (
+                    <img src={entry.avatarUrl} alt="" width="36" height="36" loading="lazy" />
+                  ) : (
+                    <span class="rank-initials" aria-hidden="true">
+                      {entry.displayName.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  <span>
+                    <strong>{entry.displayName}</strong>
+                    <span>@{entry.username}</span>
+                  </span>
+                </a>
+                <span class="rank-uses">
+                  <strong>{entry.qualifiedUses}</strong>
+                  qualified {entry.qualifiedUses === 1 ? 'use' : 'uses'}
+                </span>
+                {entry.tiedWithPrevious && <span class="tie-label">tied · earlier completion ranks higher</span>}
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <div class="info-grid">
+        <section class="info-card" aria-labelledby="prizes-heading">
+          <h2 id="prizes-heading">Prizes</h2>
+          {current.competition.prizes.length === 0 ? (
+            <p>Prize details will be published with the rules.</p>
+          ) : (
+            <dl>
+              {current.competition.prizes.map((prize) => (
+                <div>
+                  <dt>Rank {prize.rank}</dt>
+                  <dd>{money(prize.amountCents, current.competition.currency)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <p class="funding">
+            Funding: {current.competition.fundingSource ?? 'to be confirmed'} · {current.competition.currency}
+          </p>
+        </section>
+
+        <section class="info-card rules-card" aria-labelledby="rules-heading">
+          <h2 id="rules-heading">How ranking works</h2>
+          <p>
+            One qualified use is counted per traveler, template, and competition month. The creator's
+            own account, invalid uses, archived templates, and out-of-period uses do not count.
+          </p>
+          <p>
+            Ties are broken by the earlier completion of the same qualified-use total. If the tie
+            remains, an administrator reviews it using the published rules.
+          </p>
+          <a class="rules-link" href={`/competitions/${current.competition.slug}`}>
+            Full rules and eligibility
+            <ArrowRight size={12} stroke-width={2} />
+          </a>
+        </section>
+      </div>
+    </>
+  )}
+
+  {past.length > 0 && (
+    <section class="past" aria-labelledby="past-heading">
+      <h2 id="past-heading">Past winners</h2>
+      <div class="past-list">
+        {past.map((entry) => (
+          <article>
+            <div class="past-head">
+              <h3>{entry.title}</h3>
+              <Badge variant="info">{formatDate(entry.endsAt)}</Badge>
+            </div>
+            {entry.entries.length === 0 ? (
+              <p class="muted">No qualified uses recorded.</p>
+            ) : (
+              <ol>
+                {entry.entries.slice(0, 3).map((winner) => (
+                  <li>
+                    <span>{winner.rank}</span>
+                    <a href={`/creators/${winner.username}`}>{winner.displayName}</a>
+                    <span>{winner.qualifiedUses} uses</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <a class="rules-link" href={`/competitions/${entry.slug}`}>Rules and result</a>
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
 </PublicPage>
+
+<style>
+  .period {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-5);
+    padding: var(--space-5);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    margin-bottom: var(--space-3);
+  }
+
+  .period-copy {
+    max-width: 58ch;
+  }
+
+  .period-badges {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .period-timezone {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .period h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.03em;
+  }
+
+  .period p {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .period-dates {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .period-dates span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .period-side {
+    flex: none;
+    text-align: right;
+  }
+
+  .prize-label {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .prize-total {
+    margin: var(--space-1) 0 var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+  }
+
+  .provisional-note {
+    margin-bottom: var(--space-4);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .top-five {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .section-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .section-heading h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .section-heading span {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .rank-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .rank-row {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-2);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .rank-row:first-child {
+    border-top: 0;
+  }
+
+  .rank-number {
+    color: var(--color-accent);
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    text-align: center;
+  }
+
+  .rank-creator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .rank-creator img,
+  .rank-initials {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    object-fit: cover;
+  }
+
+  .rank-creator span span {
+    display: block;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .rank-uses {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-align: right;
+  }
+
+  .rank-uses strong {
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: var(--text-md);
+  }
+
+  .tie-label {
+    grid-column: 2 / -1;
+    color: var(--color-text-subtle);
+    font-size: 0.6875rem;
+  }
+
+  .empty-rank {
+    padding: var(--space-5);
+    border: var(--border-width) dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+
+  .empty-rank p {
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+  }
+
+  .empty-rank span {
+    display: block;
+    margin-top: var(--space-1);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+  }
+
+  .info-card {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .info-card h2 {
+    margin-bottom: var(--space-3);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .info-card dl {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+  }
+
+  .info-card dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .info-card dt {
+    color: var(--color-text-subtle);
+  }
+
+  .info-card dd {
+    margin: 0;
+    font-family: var(--font-mono);
+  }
+
+  .rules-card p {
+    margin-bottom: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .funding {
+    margin-top: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .rules-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    margin-top: var(--space-2);
+  }
+
+  .past {
+    margin-top: var(--space-6);
+    padding-top: var(--space-5);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .past h2 {
+    margin-bottom: var(--space-3);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .past-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-3);
+  }
+
+  .past-list article {
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .past-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .past-head h3 {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .past-list ol {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .past-list li {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+    gap: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .past-list li span:first-child {
+    color: var(--color-accent);
+    font-family: var(--font-mono);
+  }
+
+  .past-list li a {
+    color: var(--color-text);
+  }
+
+  .muted {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  @media (max-width: 800px) {
+    .period {
+      flex-direction: column;
+    }
+
+    .period-side {
+      text-align: left;
+    }
+
+    .info-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

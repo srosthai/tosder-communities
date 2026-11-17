@@ -1,0 +1,177 @@
+---
+import { CircleAlert, EyeOff, Flag, ShieldAlert, UserX } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+import { ApiError } from '../../lib/api';
+import { getModeratorAccess } from '../../lib/admin-auth';
+import { listReports, reasonCodes, resolveReport } from '../../lib/reports';
+
+export const prerender = false;
+
+const { user, allowed } = await getModeratorAccess(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+if (allowed && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const reportId = String(form.get('reportId') ?? '');
+  const action = String(form.get('action') ?? '') as
+    | 'dismiss'
+    | 'hide-template'
+    | 'hide-review'
+    | 'warn-user'
+    | 'suspend-user'
+    | 'escalate';
+  try {
+    await resolveReport(
+      { id: user.id, email: user.email },
+      reportId,
+      action,
+      String(form.get('note') ?? ''),
+    );
+    return Astro.redirect('/admin/reports?notice=resolved');
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'The action could not be completed.';
+    return Astro.redirect(`/admin/reports?error=${encodeURIComponent(message)}`);
+  }
+}
+
+const status = Astro.url.searchParams.get('status') ?? 'OPEN';
+const priority = Astro.url.searchParams.get('priority') ?? 'ALL';
+const targetType = Astro.url.searchParams.get('target') ?? 'ALL';
+const page = Number(Astro.url.searchParams.get('page') ?? '1') || 1;
+
+const result = allowed
+  ? await listReports({
+      status: status as never,
+      priority: priority as never,
+      targetType: targetType as never,
+      page,
+    })
+  : { reports: [], total: 0, page: 1, totalPages: 1 };
+
+const notice = Astro.url.searchParams.get('notice');
+const error = Astro.url.searchParams.get('error');
+const statuses = ['OPEN', 'IN_REVIEW', 'ESCALATED', 'RESOLVED', 'DISMISSED', 'ALL'];
+const buildUrl = (overrides: Record<string, string | number | undefined>) => {
+  const params = new URLSearchParams();
+  if (status !== 'OPEN') params.set('status', status);
+  if (priority !== 'ALL') params.set('priority', priority);
+  if (targetType !== 'ALL') params.set('target', targetType);
+  if (page > 1) params.set('page', String(page));
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined || value === 'ALL' || value === 'OPEN' || value === 1) params.delete(key);
+    else params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query ? `/admin/reports?${query}` : '/admin/reports';
+};
+---
+
+<AdminLayout title="Reports">
+  <PageHeader title="Reports" description="Reporter identities stay private to moderators. Every decision is audited.">
+    <a class="back-link" href="/admin/moderation">Template review</a>
+  </PageHeader>
+
+  {notice === 'resolved' && <p class="notice notice--success" role="status">Report resolved.</p>}
+  {error && <p class="notice notice--error" role="alert">{error}</p>}
+
+  {!allowed ? (
+    <p class="forbidden" role="alert">Moderator access required.</p>
+  ) : (
+    <>
+      <form method="get" class="filters">
+        <label><span>Status</span><select name="status">{statuses.map((value) => <option value={value} selected={status === value}>{value}</option>)}</select></label>
+        <label><span>Priority</span><select name="priority">{['ALL','HIGH','MEDIUM','LOW'].map((value) => <option value={value} selected={priority === value}>{value}</option>)}</select></label>
+        <label><span>Target</span><select name="target">{['ALL','TEMPLATE','REVIEW','USER'].map((value) => <option value={value} selected={targetType === value}>{value}</option>)}</select></label>
+        <button type="submit">Filter</button>
+        <span class="count">{result.total} reports</span>
+      </form>
+
+      {result.reports.length === 0 ? (
+        <div class="empty">No reports in this view.</div>
+      ) : (
+        <div class="report-list">
+          {result.reports.map((report) => (
+            <article class="report">
+              <div class="report-head">
+                <div>
+                  <div class="report-title">
+                    <Badge variant={report.priority === 'HIGH' ? 'danger' : report.priority === 'MEDIUM' ? 'warning' : 'neutral'} dot>{report.priority}</Badge>
+                    <strong>{report.targetLabel}</strong>
+                    <Badge variant={report.status === 'OPEN' ? 'warning' : report.status === 'RESOLVED' ? 'success' : 'neutral'}>{report.status}</Badge>
+                  </div>
+                  <p class="meta">
+                    {report.targetType} · reported by {report.reporter.username} · {report.createdAt.toLocaleString('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    {report.targetHref && <> · <a href={report.targetHref} target="_blank" rel="noreferrer">Open target</a></>}
+                  </p>
+                  <p class="reason">
+                    {reasonCodes[report.reasonCode as keyof typeof reasonCodes]?.label ?? report.reasonCode}
+                    {report.details ? ` — ${report.details}` : ''}
+                  </p>
+                  {report.targetText && <blockquote>{report.targetText}</blockquote>}
+                </div>
+              </div>
+
+              {report.status !== 'RESOLVED' && report.status !== 'DISMISSED' && (
+                <div class="actions">
+                  {report.targetType === 'TEMPLATE' && (
+                    <form method="post"><input type="hidden" name="reportId" value={report.id} /><input type="hidden" name="action" value="hide-template" /><input name="note" required minlength="3" placeholder="Reason" /><Button type="submit" variant="danger" size="sm"><EyeOff size={13} stroke-width={1.75} />Hide template</Button></form>
+                  )}
+                  {report.targetType === 'REVIEW' && (
+                    <form method="post"><input type="hidden" name="reportId" value={report.id} /><input type="hidden" name="action" value="hide-review" /><input name="note" required minlength="3" placeholder="Reason" /><Button type="submit" variant="danger" size="sm"><EyeOff size={13} stroke-width={1.75} />Hide review</Button></form>
+                  )}
+                  {report.targetType === 'USER' && (
+                    <>
+                      <form method="post"><input type="hidden" name="reportId" value={report.id} /><input type="hidden" name="action" value="warn-user" /><input name="note" required minlength="3" placeholder="Warning note" /><Button type="submit" variant="secondary" size="sm"><Flag size={13} stroke-width={1.75} />Warn</Button></form>
+                      <form method="post"><input type="hidden" name="reportId" value={report.id} /><input type="hidden" name="action" value="suspend-user" /><input name="note" required minlength="3" placeholder="Suspension reason" /><Button type="submit" variant="danger" size="sm"><UserX size={13} stroke-width={1.75} />Suspend</Button></form>
+                    </>
+                  )}
+                  <form method="post"><input type="hidden" name="reportId" value={report.id} /><input type="hidden" name="action" value="escalate" /><input name="note" required minlength="3" placeholder="Escalation note" /><Button type="submit" variant="secondary" size="sm"><ShieldAlert size={13} stroke-width={1.75} />Escalate</Button></form>
+                  <form method="post"><input type="hidden" name="reportId" value={report.id} /><input type="hidden" name="action" value="dismiss" /><input name="note" placeholder="Optional note" /><Button type="submit" variant="ghost" size="sm">Dismiss</Button></form>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+
+      {result.totalPages > 1 && (
+        <nav class="pagination">
+          {result.page > 1 ? <a href={buildUrl({ page: result.page - 1 })}>Previous</a> : <span />}
+          <span>Page {result.page} of {result.totalPages}</span>
+          {result.page < result.totalPages ? <a href={buildUrl({ page: result.page + 1 })}>Next</a> : <span />}
+        </nav>
+      )}
+    </>
+  )}
+</AdminLayout>
+
+<style>
+  .back-link { color: var(--color-text-muted); font-size: var(--text-sm); text-decoration: underline; text-underline-offset: 2px; }
+  .notice { margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); font-size: var(--text-sm); }
+  .notice--success { background: var(--color-success-bg); color: var(--color-success-text); }
+  .notice--error { background: var(--color-danger-bg); color: var(--color-danger-text); }
+  .forbidden, .empty { padding: var(--space-6); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .filters { display: flex; align-items: flex-end; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
+  .filters label { display: flex; flex-direction: column; gap: var(--space-1); }
+  .filters span { color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .filters select, .filters button { height: var(--control-height-sm); padding: 0 var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font-size: var(--text-sm); }
+  .count { margin-left: auto; color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); }
+  .report-list { display: flex; flex-direction: column; gap: var(--space-2); }
+  .report { padding: var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+  .report-title { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+  .report-title strong { font-size: var(--text-sm); }
+  .meta { margin-top: var(--space-1); color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .meta a { color: var(--color-text-muted); text-decoration: underline; text-underline-offset: 2px; }
+  .reason { margin-top: var(--space-2); color: var(--color-text-muted); font-size: var(--text-sm); }
+  blockquote { margin-top: var(--space-2); padding-left: var(--space-3); border-left: 2px solid var(--color-border); color: var(--color-text-muted); font-size: var(--text-xs); }
+  .actions { display: flex; align-items: flex-end; gap: var(--space-2); margin-top: var(--space-2); flex-wrap: wrap; }
+  .actions form { display: flex; align-items: flex-end; gap: var(--space-1); }
+  .actions input { height: var(--control-height-sm); padding: 0 var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font-size: var(--text-xs); }
+  .pagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-3); color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .pagination a { color: var(--color-text-muted); text-decoration: underline; text-underline-offset: 2px; }
+</style>

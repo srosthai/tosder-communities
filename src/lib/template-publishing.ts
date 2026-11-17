@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Prisma, TemplateStatus } from '@prisma/client';
 import { getPrisma } from '../db/prisma';
 import { ApiError } from './api';
+import { isTrustedCreator } from './permissions';
 import { validateTemplate, type BuilderTemplate } from './template-builder';
 
 export interface TemplateSnapshot {
@@ -119,7 +120,7 @@ async function loadTemplate(id: string) {
   return getPrisma().travelTemplate.findUnique({
     where: { id },
     include: {
-      creator: { select: { userId: true, username: true, displayName: true, trustedCreator: true } },
+      creator: { select: { userId: true, username: true, displayName: true, trustedCreator: true, role: true } },
       province: { select: { id: true, name: true, slug: true } },
       publishedVersion: {
         select: { id: true, versionNumber: true, createdAt: true },
@@ -257,7 +258,7 @@ export async function publishTemplate(
     });
   }
 
-  if (!template.creator.trustedCreator) {
+  if (!isTrustedCreator(template.creator)) {
     throw new ApiError({
       status: 403,
       code: 'review_required',

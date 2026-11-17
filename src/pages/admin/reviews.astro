@@ -4,12 +4,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import PageHeader from '../../components/admin/PageHeader.astro';
 import Badge from '../../components/ui/Badge.astro';
 import Button from '../../components/ui/Button.astro';
-import { getContentAdmin } from '../../lib/admin-auth';
+import { getModeratorAccess } from '../../lib/admin-auth';
 import { hideReview, listReviewsForAdmin } from '../../lib/reviews';
 
 export const prerender = false;
 
-const { user, allowed } = await getContentAdmin(Astro);
+const { user, allowed } = await getModeratorAccess(Astro);
 if (!user) {
   return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
 }

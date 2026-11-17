@@ -6,7 +6,7 @@ import Panel from '../../components/admin/Panel.astro';
 import Badge from '../../components/ui/Badge.astro';
 import Button from '../../components/ui/Button.astro';
 import { ApiError } from '../../lib/api';
-import { getContentAdmin } from '../../lib/admin-auth';
+import { getModeratorAccess } from '../../lib/admin-auth';
 import { getCreatorTemplate } from '../../lib/templates';
 import { validateTemplate, type BuilderTemplate } from '../../lib/template-builder';
 import {
@@ -17,7 +17,7 @@ import {
 
 export const prerender = false;
 
-const { user, allowed } = await getContentAdmin(Astro);
+const { user, allowed } = await getModeratorAccess(Astro);
 if (!user) {
   return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
 }
@@ -79,6 +79,7 @@ const notices: Record<string, string> = {
   >
     <div class="header-actions">
       <a class="header-link" href="/admin/reviews">Review reports</a>
+      <a class="header-link" href="/admin/reports">Member reports</a>
       <Badge variant={pending.length > 0 ? 'warning' : 'success'} dot>
         {pending.length} awaiting review
       </Badge>

@@ -2,8 +2,10 @@
 import { ArrowLeft, BadgeCheck, CalendarDays, Route } from '@lucide/astro';
 import PublicLayout from '../../layouts/PublicLayout.astro';
 import PublicButton from '../../components/public/PublicButton.astro';
+import ReportButton from '../../components/public/ReportButton.astro';
 import TemplateCard from '../../components/public/TemplateCard.astro';
 import EmptyState from '../../components/ui/EmptyState.astro';
+import { getSessionUser } from '../../lib/auth-user';
 import { requestOrigin } from '../../lib/request-origin';
 import { getPublicCreatorProfile } from '../../lib/public-templates';
 
@@ -11,6 +13,7 @@ export const prerender = false;
 
 const username = Astro.params.username ?? '';
 const profile = await getPublicCreatorProfile(username);
+const viewer = await getSessionUser(Astro);
 
 if (!profile) {
   Astro.response.status = 404;
@@ -96,6 +99,16 @@ const jsonLd =
                 {profile.templates.length} published {profile.templates.length === 1 ? 'template' : 'templates'}
               </span>
             </div>
+            {viewer && profile && (
+              <div class="profile-report">
+                <ReportButton
+                  type="USER"
+                  id={profile.userId}
+                  signedIn={Boolean(viewer)}
+                  redirectTo={`/creators/${profile.username}`}
+                />
+              </div>
+            )}
             {socialLinks.length > 0 && (
               <div class="socials">
                 {socialLinks.map(([name, value]) => (
