@@ -60,6 +60,9 @@ const statusVariant = (status: string) =>
     ]}
   >
     <MapPin slot="icon" size={18} stroke-width={1.75} />
+    <a slot="actions" class="create-link create-link--secondary" href="/admin/content/taxonomy">
+      Taxonomy
+    </a>
     <a slot="actions" class="create-link" href="/admin/content/new">
       <Plus size={14} stroke-width={2} />
       New destination
@@ -136,6 +139,16 @@ const statusVariant = (status: string) =>
 
   .create-link:hover {
     background: var(--color-accent-hover);
+  }
+
+  .create-link--secondary {
+    border: var(--border-width) solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .create-link--secondary:hover {
+    background: var(--color-surface-sunken);
   }
 
   .cell-main {

@@ -1,0 +1,455 @@
+---
+import { Archive, ChevronRight, Plus, Save, Trash2 } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PageHeader from '../../../components/admin/PageHeader.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import { getPrisma } from '../../../db/prisma';
+import { getContentAdmin } from '../../../lib/admin-auth';
+import {
+  formatTaxonomyError,
+  parseTaxonomyForm,
+  saveTaxonomy,
+  slugIsTaken,
+  taxonomyAudit,
+  type TaxonomyTab,
+} from '../../../lib/taxonomy';
+
+export const prerender = false;
+
+const { user, allowed } = await getContentAdmin(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+const tabParam = Astro.url.searchParams.get('tab') ?? 'provinces';
+const tab: TaxonomyTab = ['provinces', 'categories', 'tags', 'collections'].includes(tabParam)
+  ? (tabParam as TaxonomyTab)
+  : 'provinces';
+const notice = Astro.url.searchParams.get('notice');
+const error = Astro.url.searchParams.get('error');
+let actionError: string | null = null;
+
+if (allowed && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('action') || form.get('intent') || '');
+  const id = String(form.get('id') ?? '') || null;
+
+  try {
+    if (intent === 'create' || intent === 'update') {
+      const parsed = parseTaxonomyForm(tab, form);
+      if (!parsed.success) {
+        actionError = formatTaxonomyError(parsed.error);
+      } else {
+        await saveTaxonomy(tab, intent, id, parsed.data as never, {
+          id: user.id,
+          email: user.email,
+        });
+        return Astro.redirect(`/admin/content/taxonomy?tab=${tab}&notice=saved`);
+      }
+    } else if (intent === 'archive' && id && (tab === 'provinces' || tab === 'collections')) {
+      const prisma = getPrisma();
+      if (tab === 'provinces') {
+        const record = await prisma.province.update({
+          where: { id },
+          data: { status: 'ARCHIVED' },
+        });
+        await prisma.auditEvent.create({
+          data: taxonomyAudit(
+            { id: user.id, email: user.email },
+            'province.archived',
+            'province',
+            record.id,
+            `Archived ${record.name}`,
+            { slug: record.slug },
+          ),
+        });
+      } else {
+        const record = await prisma.featuredCollection.update({
+          where: { id },
+          data: { status: 'ARCHIVED' },
+        });
+        await prisma.auditEvent.create({
+          data: taxonomyAudit(
+            { id: user.id, email: user.email },
+            'collection.archived',
+            'featured_collection',
+            record.id,
+            `Archived ${record.title}`,
+            { slug: record.slug },
+          ),
+        });
+      }
+      return Astro.redirect(`/admin/content/taxonomy?tab=${tab}&notice=archived`);
+    } else if (intent === 'delete' && id && (tab === 'categories' || tab === 'tags')) {
+      const prisma = getPrisma();
+      if (tab === 'categories') {
+        const used = await prisma.destinationCategory.count({ where: { categoryId: id } });
+        if (used > 0) {
+          actionError = 'This category is used by destinations. Remove it from destination editors first.';
+        } else {
+          const record = await prisma.category.delete({ where: { id } });
+          await prisma.auditEvent.create({
+            data: taxonomyAudit(
+              { id: user.id, email: user.email },
+              'category.deleted',
+              'category',
+              record.id,
+              `Deleted ${record.name}`,
+              { slug: record.slug },
+            ),
+          });
+          return Astro.redirect(`/admin/content/taxonomy?tab=${tab}&notice=deleted`);
+        }
+      } else {
+        const used = await prisma.destinationTag.count({ where: { tagId: id } });
+        if (used > 0) {
+          actionError = 'This tag is used by destinations. Remove it from destination editors first.';
+        } else {
+          const record = await prisma.tag.delete({ where: { id } });
+          await prisma.auditEvent.create({
+            data: taxonomyAudit(
+              { id: user.id, email: user.email },
+              'tag.deleted',
+              'tag',
+              record.id,
+              `Deleted ${record.name}`,
+              { slug: record.slug },
+            ),
+          });
+          return Astro.redirect(`/admin/content/taxonomy?tab=${tab}&notice=deleted`);
+        }
+      }
+    } else {
+      actionError = 'Unknown action.';
+    }
+  } catch (caught) {
+    actionError = (await slugIsTaken(caught))
+      ? 'That slug is already in use.'
+      : caught instanceof Error
+        ? caught.message
+        : 'The change could not be saved.';
+  }
+}
+
+const prisma = allowed ? getPrisma() : null;
+const [provinces, categories, tags, collections, destinations] = prisma
+  ? await Promise.all([
+      prisma.province.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        include: { _count: { select: { destinations: true, templates: true } } },
+      }),
+      prisma.category.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        include: { _count: { select: { destinations: true } } },
+      }),
+      prisma.tag.findMany({
+        orderBy: { name: 'asc' },
+        include: { _count: { select: { destinations: true } } },
+      }),
+      prisma.featuredCollection.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
+        include: {
+          items: {
+            orderBy: { sortOrder: 'asc' },
+            include: { destination: { select: { id: true, name: true } } },
+          },
+        },
+      }),
+      prisma.destination.findMany({
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, province: { select: { name: true } }, status: true },
+      }),
+    ])
+  : [[], [], [], [], []];
+
+const statusVariant = (value: string) =>
+  value === 'PUBLISHED' ? 'success' : value === 'DRAFT' ? 'neutral' : 'warning';
+const tabs: Array<{ id: TaxonomyTab; label: string; count: number }> = [
+  { id: 'provinces', label: 'Provinces', count: provinces.length },
+  { id: 'categories', label: 'Categories', count: categories.length },
+  { id: 'tags', label: 'Tags', count: tags.length },
+  { id: 'collections', label: 'Collections', count: collections.length },
+];
+---
+
+<AdminLayout title="Taxonomy">
+  <PageHeader title="Taxonomy" description="Provinces, categories, tags, and editorial collections. Every change is audited.">
+    <a class="header-link" href="/admin/content">Destinations</a>
+  </PageHeader>
+
+  {(notice || error || actionError) && (
+    <p class:list={['notice', { 'notice--error': Boolean(error || actionError) }]} role={error || actionError ? 'alert' : 'status'}>
+      {error ?? actionError ?? (notice === 'archived' ? 'Archived.' : notice === 'deleted' ? 'Deleted.' : 'Saved.')}
+    </p>
+  )}
+
+  {!allowed ? (
+    <p class="forbidden" role="alert">Content administrator access required.</p>
+  ) : (
+    <>
+      <nav class="tabs" aria-label="Taxonomy sections">
+        {tabs.map((item) => (
+          <a href={`/admin/content/taxonomy?tab=${item.id}`} class:list={['tab', { 'tab--active': tab === item.id }]}>
+            {item.label}
+            <span>{item.count}</span>
+          </a>
+        ))}
+      </nav>
+
+      <div class="layout">
+        <section class="panel" aria-labelledby="create-heading">
+          <h2 id="create-heading">
+            <Plus size={14} stroke-width={2} />
+            New {tab === 'collections' ? 'collection' : tab.slice(0, -1)}
+          </h2>
+
+          <form method="post" class="stack">
+            <input type="hidden" name="intent" value="create" />
+
+            {tab === 'provinces' && (
+              <>
+                <label>Name<input name="name" required maxlength="120" placeholder="Kampot" /></label>
+                <label>Slug<input name="slug" required maxlength="120" placeholder="kampot" pattern="[a-z0-9-]+" /></label>
+                <label>Summary<textarea name="summary" rows="2" maxlength="400" placeholder="One line for cards and listings."></textarea></label>
+                <label>Description<textarea name="description" rows="4" maxlength="4000"></textarea></label>
+                <label>Hero image URL<input name="heroImageUrl" maxlength="600" placeholder="https://…" /></label>
+                <div class="split">
+                  <label>Status<select name="status"><option value="DRAFT">Draft</option><option value="PUBLISHED">Published</option><option value="ARCHIVED">Archived</option></select></label>
+                  <label>Sort order<input name="sortOrder" type="number" min="0" max="10000" value="0" /></label>
+                </div>
+              </>
+            )}
+
+            {tab === 'categories' && (
+              <>
+                <label>Name<input name="name" required maxlength="80" placeholder="Nature" /></label>
+                <label>Slug<input name="slug" required maxlength="120" placeholder="nature" pattern="[a-z0-9-]+" /></label>
+                <label>Description<textarea name="description" rows="3" maxlength="400"></textarea></label>
+                <label>Sort order<input name="sortOrder" type="number" min="0" max="10000" value="0" /></label>
+              </>
+            )}
+
+            {tab === 'tags' && (
+              <>
+                <label>Name<input name="name" required maxlength="60" placeholder="Sunrise" /></label>
+                <label>Slug<input name="slug" required maxlength="120" placeholder="sunrise" pattern="[a-z0-9-]+" /></label>
+              </>
+            )}
+
+            {tab === 'collections' && (
+              <>
+                <label>Title<input name="title" required maxlength="120" placeholder="Coast and islands" /></label>
+                <label>Slug<input name="slug" required maxlength="120" placeholder="coast-and-islands" pattern="[a-z0-9-]+" /></label>
+                <label>Description<textarea name="description" rows="3" maxlength="600"></textarea></label>
+                <div class="split">
+                  <label>Status<select name="status"><option value="DRAFT">Draft</option><option value="PUBLISHED">Published</option><option value="ARCHIVED">Archived</option></select></label>
+                  <label>Sort order<input name="sortOrder" type="number" min="0" max="10000" value="0" /></label>
+                </div>
+                <fieldset class="destinations">
+                  <legend>Destinations</legend>
+                  {destinations.map((destination) => (
+                    <label class="check">
+                      <input type="checkbox" name="destinationIds" value={destination.id} />
+                      <span>{destination.name}</span>
+                      <small>{destination.province.name} · {destination.status.toLowerCase()}</small>
+                    </label>
+                  ))}
+                </fieldset>
+              </>
+            )}
+
+            <button class="button" type="submit"><Save size={14} stroke-width={2} />Create</button>
+          </form>
+        </section>
+
+        <section class="panel panel--list" aria-labelledby="list-heading">
+          <h2 id="list-heading">{tabs.find((item) => item.id === tab)?.label}</h2>
+
+          {tab === 'provinces' && (
+            <div class="rows">
+              {provinces.map((province) => (
+                <details class="row">
+                  <summary>
+                    <span class="row-main">
+                      <strong>{province.name}</strong>
+                      <span>/{province.slug} · {province._count.destinations} destinations · {province._count.templates} templates</span>
+                    </span>
+                    <Badge variant={statusVariant(province.status)} dot>{province.status}</Badge>
+                    <ChevronRight size={14} stroke-width={1.75} />
+                  </summary>
+                  <form method="post" class="stack row-form">
+                    <input type="hidden" name="intent" value="update" />
+                    <input type="hidden" name="id" value={province.id} />
+                    <label>Name<input name="name" required maxlength="120" value={province.name} /></label>
+                    <label>Slug<input name="slug" required maxlength="120" value={province.slug} pattern="[a-z0-9-]+" /></label>
+                    <label>Summary<textarea name="summary" rows="2" maxlength="400">{province.summary ?? ''}</textarea></label>
+                    <label>Description<textarea name="description" rows="4" maxlength="4000">{province.description ?? ''}</textarea></label>
+                    <label>Hero image URL<input name="heroImageUrl" maxlength="600" value={province.heroImageUrl ?? ''} /></label>
+                    <div class="split">
+                      <label>Status<select name="status">{['DRAFT','PUBLISHED','ARCHIVED'].map((value) => <option value={value} selected={province.status === value}>{value}</option>)}</select></label>
+                      <label>Sort order<input name="sortOrder" type="number" min="0" max="10000" value={province.sortOrder} /></label>
+                    </div>
+                    <div class="row-actions">
+                      <button class="button" type="submit"><Save size={13} stroke-width={2} />Save</button>
+                      {province.status !== 'ARCHIVED' && (
+                        <button class="button button--ghost" type="submit" name="action" value="archive" formnovalidate><Archive size={13} stroke-width={2} />Archive</button>
+                      )}
+                    </div>
+                  </form>
+                </details>
+              ))}
+            </div>
+          )}
+
+          {tab === 'categories' && (
+            <div class="rows">
+              {categories.map((category) => (
+                <details class="row">
+                  <summary>
+                    <span class="row-main">
+                      <strong>{category.name}</strong>
+                      <span>/{category.slug} · {category._count.destinations} destinations</span>
+                    </span>
+                    <span class="order">{category.sortOrder}</span>
+                    <ChevronRight size={14} stroke-width={1.75} />
+                  </summary>
+                  <form method="post" class="stack row-form">
+                    <input type="hidden" name="intent" value="update" />
+                    <input type="hidden" name="id" value={category.id} />
+                    <label>Name<input name="name" required maxlength="80" value={category.name} /></label>
+                    <label>Slug<input name="slug" required maxlength="120" value={category.slug} pattern="[a-z0-9-]+" /></label>
+                    <label>Description<textarea name="description" rows="3" maxlength="400">{category.description ?? ''}</textarea></label>
+                    <label>Sort order<input name="sortOrder" type="number" min="0" max="10000" value={category.sortOrder} /></label>
+                    <div class="row-actions">
+                      <button class="button" type="submit"><Save size={13} stroke-width={2} />Save</button>
+                      <button class="button button--ghost" type="submit" name="action" value="delete" formnovalidate disabled={category._count.destinations > 0} title={category._count.destinations > 0 ? 'Used by destinations' : 'Delete category'}><Trash2 size={13} stroke-width={2} />Delete</button>
+                    </div>
+                  </form>
+                </details>
+              ))}
+            </div>
+          )}
+
+          {tab === 'tags' && (
+            <div class="rows">
+              {tags.map((tag) => (
+                <details class="row">
+                  <summary>
+                    <span class="row-main">
+                      <strong>{tag.name}</strong>
+                      <span>/{tag.slug} · {tag._count.destinations} destinations</span>
+                    </span>
+                    <ChevronRight size={14} stroke-width={1.75} />
+                  </summary>
+                  <form method="post" class="stack row-form">
+                    <input type="hidden" name="intent" value="update" />
+                    <input type="hidden" name="id" value={tag.id} />
+                    <label>Name<input name="name" required maxlength="60" value={tag.name} /></label>
+                    <label>Slug<input name="slug" required maxlength="120" value={tag.slug} pattern="[a-z0-9-]+" /></label>
+                    <div class="row-actions">
+                      <button class="button" type="submit"><Save size={13} stroke-width={2} />Save</button>
+                      <button class="button button--ghost" type="submit" name="action" value="delete" formnovalidate disabled={tag._count.destinations > 0} title={tag._count.destinations > 0 ? 'Used by destinations' : 'Delete tag'}><Trash2 size={13} stroke-width={2} />Delete</button>
+                    </div>
+                  </form>
+                </details>
+              ))}
+            </div>
+          )}
+
+          {tab === 'collections' && (
+            <div class="rows">
+              {collections.map((collection) => (
+                <details class="row">
+                  <summary>
+                    <span class="row-main">
+                      <strong>{collection.title}</strong>
+                      <span>/{collection.slug} · {collection.items.length} destinations</span>
+                    </span>
+                    <Badge variant={statusVariant(collection.status)} dot>{collection.status}</Badge>
+                    <ChevronRight size={14} stroke-width={1.75} />
+                  </summary>
+                  <form method="post" class="stack row-form">
+                    <input type="hidden" name="intent" value="update" />
+                    <input type="hidden" name="id" value={collection.id} />
+                    <label>Title<input name="title" required maxlength="120" value={collection.title} /></label>
+                    <label>Slug<input name="slug" required maxlength="120" value={collection.slug} pattern="[a-z0-9-]+" /></label>
+                    <label>Description<textarea name="description" rows="3" maxlength="600">{collection.description ?? ''}</textarea></label>
+                    <div class="split">
+                      <label>Status<select name="status">{['DRAFT','PUBLISHED','ARCHIVED'].map((value) => <option value={value} selected={collection.status === value}>{value}</option>)}</select></label>
+                      <label>Sort order<input name="sortOrder" type="number" min="0" max="10000" value={collection.sortOrder} /></label>
+                    </div>
+                    <fieldset class="destinations">
+                      <legend>Destinations</legend>
+                      {destinations.map((destination) => (
+                        <label class="check">
+                          <input type="checkbox" name="destinationIds" value={destination.id} checked={collection.items.some((item) => item.destinationId === destination.id)} />
+                          <span>{destination.name}</span>
+                          <small>{destination.province.name}</small>
+                        </label>
+                      ))}
+                    </fieldset>
+                    <div class="row-actions">
+                      <button class="button" type="submit"><Save size={13} stroke-width={2} />Save</button>
+                      {collection.status !== 'ARCHIVED' && (
+                        <button class="button button--ghost" type="submit" name="action" value="archive" formnovalidate><Archive size={13} stroke-width={2} />Archive</button>
+                      )}
+                    </div>
+                  </form>
+                </details>
+              ))}
+            </div>
+          )}
+
+          {((tab === 'provinces' && provinces.length === 0) ||
+            (tab === 'categories' && categories.length === 0) ||
+            (tab === 'tags' && tags.length === 0) ||
+            (tab === 'collections' && collections.length === 0)) && (
+            <p class="empty">Nothing here yet. Create the first one.</p>
+          )}
+        </section>
+      </div>
+    </>
+  )}
+</AdminLayout>
+
+<style>
+  .header-link { color: var(--color-text-muted); font-size: var(--text-sm); text-decoration: underline; text-underline-offset: 2px; }
+  .notice { margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); font-size: var(--text-sm); }
+  .notice--error { border-color: var(--color-danger-border); background: var(--color-danger-bg); color: var(--color-danger-text); }
+  .forbidden { padding: var(--space-5); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); font-size: var(--text-sm); }
+  .tabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-4); border-bottom: var(--border-width) solid var(--color-border); }
+  .tab { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); color: var(--color-text-muted); font-size: var(--text-sm); border-bottom: 2px solid transparent; }
+  .tab span { color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); }
+  .tab--active { color: var(--color-text); border-bottom-color: var(--color-accent); }
+  .layout { display: grid; grid-template-columns: minmax(0, 20rem) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+  .panel { padding: var(--space-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+  .panel h2 { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+  .panel--list { min-width: 0; }
+  .stack { display: flex; flex-direction: column; gap: var(--space-2); }
+  label { display: flex; flex-direction: column; gap: var(--space-1); color: var(--color-text-muted); font-size: var(--text-xs); }
+  input, select, textarea { width: 100%; padding: var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); }
+  textarea { resize: vertical; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+  .button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1); height: var(--control-height-sm); padding: 0 var(--space-2); border: var(--border-width) solid transparent; border-radius: var(--radius-sm); background: var(--color-accent); color: var(--color-accent-contrast); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+  .button--ghost { border-color: var(--color-border); background: transparent; color: var(--color-text-muted); }
+  .button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .rows { display: flex; flex-direction: column; gap: var(--space-1); }
+  .row { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+  .row summary { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); cursor: pointer; list-style: none; }
+  .row summary::-webkit-details-marker { display: none; }
+  .row-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+  .row-main strong { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+  .row-main span { color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .row summary svg { color: var(--color-text-subtle); }
+  .row[open] summary svg { transform: rotate(90deg); }
+  .row-form { padding: var(--space-3); border-top: var(--border-width) solid var(--color-border); background: var(--color-surface-sunken); }
+  .row-actions { display: flex; gap: var(--space-2); margin-top: var(--space-1); }
+  .order { color: var(--color-text-subtle); font-family: var(--font-mono); font-size: var(--text-xs); }
+  .destinations { max-height: 16rem; overflow: auto; padding: var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); }
+  .destinations legend { padding: 0 var(--space-1); color: var(--color-text-muted); font-size: var(--text-xs); }
+  .check { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; padding: var(--space-1) 0; }
+  .check input { width: auto; }
+  .check small { grid-column: 2; color: var(--color-text-subtle); font-size: var(--text-xs); }
+  .empty { padding: var(--space-4); color: var(--color-text-subtle); font-size: var(--text-sm); }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+</style>

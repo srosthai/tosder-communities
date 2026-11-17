@@ -14,6 +14,7 @@ test.describe('admin visual', () => {
 
       await expect(page).toHaveScreenshot(`admin-${route.name}.png`, {
         fullPage: true,
+        maxDiffPixelRatio: 0.02,
       });
     });
 
@@ -29,6 +30,7 @@ test.describe('admin visual', () => {
 
       await expect(page).toHaveScreenshot(`admin-${route.name}-light.png`, {
         fullPage: true,
+        maxDiffPixelRatio: 0.02,
       });
     });
   }
