@@ -67,6 +67,9 @@ jobs:
       - name: Verify template schema constraints
         run: npm run db:template-check
 
+      - name: Verify trip schema constraints
+        run: npm run db:trip-check
+
       - name: Type and Astro checks
         run: npm run check
 

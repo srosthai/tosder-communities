@@ -1,0 +1,272 @@
+---
+import { Bookmark, Trash2 } from '@lucide/astro';
+import PublicPage from '../components/public/PublicPage.astro';
+import PublicButton from '../components/public/PublicButton.astro';
+import TemplateCard from '../components/public/TemplateCard.astro';
+import DestinationCard from '../components/public/DestinationCard.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import { ApiError } from '../lib/api';
+import { getSessionUser } from '../lib/auth-user';
+import { ensureMemberProfile } from '../lib/profiles';
+import {
+  listSavedDestinations,
+  listSavedTemplates,
+  unsaveDestination,
+  unsaveTemplate,
+} from '../lib/saves';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+await ensureMemberProfile(user);
+
+const notices: Record<string, string> = {
+  removed: 'Removed from saved items.',
+};
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const id = String(form.get('id') ?? '');
+  const tab = String(form.get('tab') ?? 'templates');
+
+  try {
+    if (intent === 'remove-template') await unsaveTemplate(user.id, id);
+    if (intent === 'remove-destination') await unsaveDestination(user.id, id);
+    return Astro.redirect(`/saved?type=${tab}&notice=removed`);
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Could not remove the save.';
+    return Astro.redirect(`/saved?type=${tab}&error=${encodeURIComponent(message)}`);
+  }
+}
+
+const type = Astro.url.searchParams.get('type') === 'destinations' ? 'destinations' : 'templates';
+const page = Number(Astro.url.searchParams.get('page') ?? '1') || 1;
+const templateResult = await listSavedTemplates(user.id, type === 'templates' ? page : 1);
+const destinationResult = await listSavedDestinations(user.id, type === 'destinations' ? page : 1);
+
+const result = type === 'templates' ? templateResult : destinationResult;
+const notice = Astro.url.searchParams.get('notice');
+const error = Astro.url.searchParams.get('error');
+
+const buildUrl = (overrides: Record<string, string | number | undefined>) => {
+  const params = new URLSearchParams();
+  if (type !== 'templates') params.set('type', type);
+  if (page > 1) params.set('page', String(page));
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined || value === '' || value === 'templates' || value === 1) params.delete(key);
+    else params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query ? `/saved?${query}` : '/saved';
+};
+---
+
+<PublicPage
+  label="Saved"
+  title="Ideas worth coming back to."
+  description="Templates and places you saved while planning. Only you can see this list."
+  noindex
+>
+  <div slot="actions" class="header-actions">
+    <PublicButton href="/templates">Browse templates</PublicButton>
+    <PublicButton href="/explore" variant="secondary">Explore places</PublicButton>
+  </div>
+
+  {notice && notices[notice] && <p class="notice notice--success" role="status">{notices[notice]}</p>}
+  {error && <p class="notice notice--error" role="alert">{error}</p>}
+
+  <nav class="saved-tabs" aria-label="Saved item types">
+    <a
+      class:list={['saved-tab', { 'is-active': type === 'templates' }]}
+      href={buildUrl({ type: 'templates', page: undefined })}
+      aria-current={type === 'templates' ? 'page' : undefined}
+    >
+      Templates
+      <span>{templateResult.total}</span>
+    </a>
+    <a
+      class:list={['saved-tab', { 'is-active': type === 'destinations' }]}
+      href={buildUrl({ type: 'destinations', page: undefined })}
+      aria-current={type === 'destinations' ? 'page' : undefined}
+    >
+      Destinations
+      <span>{destinationResult.total}</span>
+    </a>
+  </nav>
+
+  {type === 'templates' ? (
+    templateResult.templates.length === 0 ? (
+      <EmptyState
+        title="No saved templates yet"
+        description="Open a published template and use Save to keep it here for later."
+      >
+        <Bookmark slot="icon" size={20} stroke-width={1.75} />
+        <PublicButton href="/templates">Browse templates</PublicButton>
+      </EmptyState>
+    ) : (
+      <div class="grid">
+        {templateResult.templates.map((template) => (
+          <div class="saved-item">
+            <TemplateCard template={template} />
+            <form method="post" class="remove-form">
+              <input type="hidden" name="intent" value="remove-template" />
+              <input type="hidden" name="id" value={template.id} />
+              <input type="hidden" name="tab" value="templates" />
+              <button class="remove-button" type="submit">
+                <Trash2 size={12} stroke-width={1.75} />
+                Remove
+              </button>
+            </form>
+          </div>
+        ))}
+      </div>
+    )
+  ) : destinationResult.destinations.length === 0 ? (
+    <EmptyState
+      title="No saved destinations yet"
+      description="Open a place and use Save to keep it here for later."
+    >
+      <Bookmark slot="icon" size={20} stroke-width={1.75} />
+      <PublicButton href="/explore">Explore destinations</PublicButton>
+    </EmptyState>
+  ) : (
+    <div class="grid">
+      {destinationResult.destinations.map((destination) => (
+        <div class="saved-item">
+          <DestinationCard destination={destination} />
+          <form method="post" class="remove-form">
+            <input type="hidden" name="intent" value="remove-destination" />
+            <input type="hidden" name="id" value={destination.id} />
+            <input type="hidden" name="tab" value="destinations" />
+            <button class="remove-button" type="submit">
+              <Trash2 size={12} stroke-width={1.75} />
+              Remove
+            </button>
+          </form>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {result.totalPages > 1 && (
+    <nav class="pagination" aria-label="Saved items pages">
+      {result.page > 1 ? (
+        <PublicButton href={buildUrl({ page: result.page - 1 })} variant="secondary">Previous</PublicButton>
+      ) : (
+        <span />
+      )}
+      <span>Page {result.page} of {result.totalPages}</span>
+      {result.page < result.totalPages ? (
+        <PublicButton href={buildUrl({ page: result.page + 1 })} variant="secondary">Next</PublicButton>
+      ) : (
+        <span />
+      )}
+    </nav>
+  )}
+</PublicPage>
+
+<style>
+  .header-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .notice--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  }
+
+  .notice--error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  }
+
+  .saved-tabs {
+    display: flex;
+    gap: var(--space-1);
+    margin-bottom: var(--space-4);
+  }
+
+  .saved-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .saved-tab span {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .saved-tab:hover,
+  .saved-tab.is-active {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .saved-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .remove-form {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .remove-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .remove-button:hover {
+    border-color: var(--color-border);
+    color: var(--color-danger-text);
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-5);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+</style>

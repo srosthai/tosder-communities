@@ -1,0 +1,485 @@
+---
+import { ArrowRight, CalendarDays, Copy, FolderArchive, MapPin, Plus, Trash2 } from '@lucide/astro';
+import PublicPage from '../../components/public/PublicPage.astro';
+import PublicButton from '../../components/public/PublicButton.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { ApiError } from '../../lib/api';
+import { getSessionUser } from '../../lib/auth-user';
+import { ensureMemberProfile } from '../../lib/profiles';
+import {
+  archiveTrip,
+  completeTrip,
+  deleteTrip,
+  deriveTripPhase,
+  duplicateTrip,
+  listTripsForOwner,
+  tripStatusLabel,
+} from '../../lib/trips';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+await ensureMemberProfile(user);
+
+const notices: Record<string, string> = {
+  archived: 'Trip archived. The itinerary and source attribution are preserved.',
+  deleted: 'Trip deleted.',
+  completed: 'Trip marked complete.',
+  duplicated: 'Your trip copy is ready.',
+};
+
+const errors: Record<string, string> = {
+  action_failed: 'The action could not be completed.',
+  not_found: 'The trip could not be found.',
+};
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const tripId = String(form.get('tripId') ?? '');
+
+  try {
+    if (intent === 'archive') {
+      await archiveTrip(tripId, user.id);
+      return Astro.redirect('/trips?notice=archived');
+    }
+    if (intent === 'delete') {
+      await deleteTrip(tripId, user.id);
+      return Astro.redirect('/trips?notice=deleted');
+    }
+    if (intent === 'complete') {
+      await completeTrip(tripId, user.id);
+      return Astro.redirect('/trips?notice=completed');
+    }
+    if (intent === 'duplicate') {
+      const copy = await duplicateTrip(tripId, user.id);
+      return Astro.redirect(`/trips/${copy.id}?copied=1`);
+    }
+  } catch (error) {
+    const code = error instanceof ApiError ? error.code : 'action_failed';
+    return Astro.redirect(`/trips?error=${code}`);
+  }
+}
+
+const filterParam = Astro.url.searchParams.get('filter') ?? 'all';
+const allowedFilters = ['all', 'upcoming', 'current', 'past', 'draft', 'archived'] as const;
+const filter = allowedFilters.includes(filterParam as never)
+  ? (filterParam as (typeof allowedFilters)[number])
+  : 'all';
+const page = Number(Astro.url.searchParams.get('page') ?? '1') || 1;
+const result = await listTripsForOwner(user.id, { filter, page });
+
+const notice = Astro.url.searchParams.get('notice');
+const error = Astro.url.searchParams.get('error');
+
+const buildUrl = (overrides: Record<string, string | number | undefined>) => {
+  const params = new URLSearchParams();
+  if (filter !== 'all') params.set('filter', filter);
+  if (result.page > 1) params.set('page', String(result.page));
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined || value === '' || value === 'all' || value === 1) params.delete(key);
+    else params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query ? `/trips?${query}` : '/trips';
+};
+
+const today = new Date();
+const formatDate = (date: Date | null) =>
+  date
+    ? date.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+    : null;
+
+const filters = [
+  { value: 'all', label: 'All' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'current', label: 'In progress' },
+  { value: 'past', label: 'Past' },
+  { value: 'draft', label: 'Drafts' },
+  { value: 'archived', label: 'Archived' },
+];
+---
+
+<PublicPage
+  label="My trips"
+  title="Your trips, ready when you are."
+  description="Private copies of itineraries you have saved, with the source kept visible."
+  noindex
+>
+  <div slot="actions" class="header-actions">
+    <PublicButton href="/templates">
+      Find a template
+      <ArrowRight size={14} stroke-width={2} />
+    </PublicButton>
+  </div>
+
+  <div data-trips-root>
+    {notice && notices[notice] && <p class="notice notice--success" role="status">{notices[notice]}</p>}
+    {error && <p class="notice notice--error" role="alert">{errors[error] ?? errors.action_failed}</p>}
+
+    <nav class="filters" aria-label="Trip filters">
+      {filters.map((entry) => (
+        <a
+          class:list={['filter-link', { 'is-active': filter === entry.value }]}
+          href={buildUrl({ filter: entry.value, page: undefined })}
+          aria-current={filter === entry.value ? 'page' : undefined}
+        >
+          {entry.label}
+        </a>
+      ))}
+      <span class="filter-count">
+        {result.total} {result.total === 1 ? 'trip' : 'trips'}
+      </span>
+    </nav>
+
+    {result.trips.length === 0 ? (
+      <EmptyState
+        title={filter === 'all' ? 'No trips yet' : 'No trips in this view'}
+        description="Start from a published template, or explore Cambodia and build your own plan."
+      >
+        <MapPin slot="icon" size={20} stroke-width={1.75} />
+        <PublicButton href="/templates">Browse templates</PublicButton>
+        <PublicButton href="/explore" variant="secondary">Explore destinations</PublicButton>
+      </EmptyState>
+    ) : (
+      <div class="trip-list">
+        {result.trips.map((trip) => {
+          const phase = deriveTripPhase(trip, today);
+          const dateLabel =
+            trip.startDate && trip.endDate
+              ? `${formatDate(trip.startDate)} – ${formatDate(trip.endDate)}`
+              : trip.startDate
+                ? `From ${formatDate(trip.startDate)}`
+                : 'Dates not set';
+
+          return (
+            <article class="trip-row" data-trip-id={trip.id}>
+              <div class="trip-row__main">
+                <div class="trip-row__title">
+                  <a href={`/trips/${trip.id}`}>{trip.title}</a>
+                  <Badge variant={phase === 'archived' ? 'neutral' : phase === 'past' ? 'info' : 'success'} dot>
+                    {tripStatusLabel(phase)}
+                  </Badge>
+                </div>
+                <div class="trip-row__meta">
+                  <span><CalendarDays size={13} stroke-width={1.75} /> {dateLabel}</span>
+                  <span>{trip._count.days} {trip._count.days === 1 ? 'day' : 'days'}</span>
+                  {trip.sourceTemplate ? (
+                    trip.sourceTemplate.status === 'PUBLISHED' ? (
+                      <a href={`/templates/${trip.sourceTemplate.slug}`}>
+                        From {trip.sourceTemplate.title}
+                        {trip.sourceVersionNumber ? ` · v${trip.sourceVersionNumber}` : ''}
+                      </a>
+                    ) : (
+                      <span>
+                        From {trip.sourceTemplateTitle ?? trip.sourceTemplate.title}
+                        {trip.sourceVersionNumber ? ` · v${trip.sourceVersionNumber}` : ''}
+                      </span>
+                    )
+                  ) : (
+                    <span>Built from scratch</span>
+                  )}
+                </div>
+              </div>
+
+              <div class="trip-row__actions">
+                <a class="row-action" href={`/trips/${trip.id}`}>
+                  Open
+                  <ArrowRight size={12} stroke-width={2} />
+                </a>
+                <form method="post">
+                  <input type="hidden" name="intent" value="duplicate" />
+                  <input type="hidden" name="tripId" value={trip.id} />
+                  <button class="row-action" type="submit">
+                    <Copy size={12} stroke-width={1.75} />
+                    Duplicate
+                  </button>
+                </form>
+                {trip.status !== 'ARCHIVED' && (
+                  <>
+                    {trip.status !== 'COMPLETED' && (
+                      <form method="post">
+                        <input type="hidden" name="intent" value="complete" />
+                        <input type="hidden" name="tripId" value={trip.id} />
+                        <button class="row-action" type="submit">Mark complete</button>
+                      </form>
+                    )}
+                    <form method="post">
+                      <input type="hidden" name="intent" value="archive" />
+                      <input type="hidden" name="tripId" value={trip.id} />
+                      <button class="row-action" type="submit">
+                        <FolderArchive size={12} stroke-width={1.75} />
+                        Archive
+                      </button>
+                    </form>
+                  </>
+                )}
+                <form
+                  method="post"
+                  data-confirm="Delete this trip permanently? The itinerary and its source attribution will be removed. Archiving keeps them."
+                >
+                  <input type="hidden" name="intent" value="delete" />
+                  <input type="hidden" name="tripId" value={trip.id} />
+                  <button class="row-action row-action--danger" type="submit">
+                    <Trash2 size={12} stroke-width={1.75} />
+                    Delete
+                  </button>
+                </form>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    )}
+
+    {result.totalPages > 1 && (
+      <nav class="pagination" aria-label="Trip pages">
+        {result.page > 1 ? (
+          <a class="secondary-action" href={buildUrl({ page: result.page - 1 })}>Previous</a>
+        ) : (
+          <span />
+        )}
+        <span>Page {result.page} of {result.totalPages}</span>
+        {result.page < result.totalPages ? (
+          <a class="secondary-action" href={buildUrl({ page: result.page + 1 })}>Next</a>
+        ) : (
+          <span />
+        )}
+      </nav>
+    )}
+  </div>
+</PublicPage>
+
+<script>
+  const root = document.querySelector('[data-trips-root]');
+
+  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      if (!window.confirm(form.dataset.confirm || 'Continue?')) {
+        event.preventDefault();
+      }
+    });
+  });
+
+  root?.querySelectorAll<HTMLButtonElement>('button[type="submit"]').forEach((button) => {
+    button.closest('form')?.addEventListener('submit', () => {
+      button.disabled = true;
+      button.textContent = 'Working…';
+    });
+  });
+</script>
+
+<style>
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+  }
+
+  .notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .notice--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  }
+
+  .notice--error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  }
+
+  .filters {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .filter-link {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .filter-link:hover {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+  }
+
+  .filter-link.is-active {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+  }
+
+  .filter-count {
+    margin-left: auto;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .trip-list {
+    display: flex;
+    flex-direction: column;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    overflow: hidden;
+  }
+
+  .trip-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .trip-row:last-child {
+    border-bottom: 0;
+  }
+
+  .trip-row:hover {
+    background: var(--color-bg-subtle);
+  }
+
+  .trip-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .trip-row__title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .trip-row__title a {
+    color: var(--color-text);
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+  }
+
+  .trip-row__title a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .trip-row__meta {
+    display: flex;
+    gap: var(--space-3);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .trip-row__meta span,
+  .trip-row__meta a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .trip-row__meta a {
+    color: var(--color-text-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .trip-row__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+    flex: none;
+  }
+
+  .trip-row__actions form {
+    display: contents;
+  }
+
+  .row-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .row-action:hover {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .row-action--danger {
+    color: var(--color-danger-text);
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .secondary-action {
+    display: inline-flex;
+    align-items: center;
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 760px) {
+    .trip-row {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .trip-row__actions {
+      justify-content: flex-start;
+    }
+
+    .filter-count {
+      margin-left: 0;
+      width: 100%;
+    }
+  }
+</style>

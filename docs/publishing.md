@@ -49,7 +49,7 @@ to a full preview.
 | --- | --- |
 | `/templates` | Published, public templates with search and pagination. |
 | `/templates/[slug]` | Live version snapshot, schedule, map, creator card, counts, Use Template. |
-| `/templates/[slug]/use` | Signed-out visitors go through sign-in and return here; signed-in visitors continue to trip copying. |
+| `/templates/[slug]/use` | Signed-out visitors go through sign-in and return here; signed-in visitors continue to the transactional trip-copy confirmation. |
 | `/creators/[username]` | Public profile with published templates only. |
 | `/sitemap.xml` | Published templates and their creators. |
 
@@ -58,7 +58,8 @@ rejected, archived, unlisted, and pending templates return `404`.
 
 ## Current limitations
 
-- Public like/save actions wait for the engagement milestone (#38).
+- Public likes and qualified-use scoring wait for the engagement milestones
+  (#38, #39). Saving templates and destinations is live.
 - Notifications are in-app status changes and audit events; email delivery needs
   SMTP (#63).
 - Revision publishing for untrusted creators is handled by moderation.
