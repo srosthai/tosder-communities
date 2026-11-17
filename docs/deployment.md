@@ -15,7 +15,7 @@ preset. In the Vercel project:
 
 1. Framework Preset: **Astro**
 2. Root Directory: repository root
-3. Build Command: `npm run vercel-build` (applies migrations, then builds)
+3. Build Command: `npm run vercel-build` (generates Prisma, checks, and builds)
 4. Install Command: `npm install`
 5. Node.js: 24.x or newer
 
@@ -34,13 +34,13 @@ NEON_AUTH_COOKIE_SECRET 32+ character cookie secret
 CONTENT_ADMIN_EMAILS    Bootstrap comma-separated admin emails
 ```
 
-`DIRECT_URL` is used by `prisma migrate deploy` during the Vercel build. If it is omitted, the config falls back to `DATABASE_URL`; a direct URL is preferred for migrations.
+`DIRECT_URL` is used by release migration commands, not by the Vercel build. If it is omitted, the Prisma config falls back to `DATABASE_URL`; a direct URL is preferred for migrations.
 `E2E_TEST_*` variables are for local authenticated tests and must not be added to
 Vercel.
 
 ### Database
 
-Run migrations against the Neon database before or during release:
+Run migrations against the Neon database before releasing the app. Builds do not migrate, so a database incident cannot block a deploy:
 
 ```bash
 npm run db:deploy

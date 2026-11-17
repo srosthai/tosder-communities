@@ -6,18 +6,43 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
   const startedAt = performance.now();
   const databaseCheck = await checkDatabase();
 
-  let schema: 'ready' | 'missing' | 'unknown' = 'unknown';
+  const schema = {
+    templates: false,
+    roles: false,
+    competitions: false,
+  };
+  let schemaState: 'ready' | 'partial' | 'missing' | 'unknown' = 'unknown';
 
   if (databaseCheck.reachable) {
     try {
-      await getPrisma().$queryRaw`SELECT 1 FROM travel_templates LIMIT 1`;
-      schema = 'ready';
+      const rows = await getPrisma().$queryRaw<Array<{
+        templates: boolean;
+        roles: boolean;
+        competitions: boolean;
+      }>>`
+        SELECT
+          to_regclass('public.travel_templates') IS NOT NULL AS templates,
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'member_profiles'
+              AND column_name = 'suspended_at'
+          ) AS roles,
+          to_regclass('public.competitions') IS NOT NULL AS competitions
+      `;
+      const row = rows[0];
+      if (row) {
+        schema.templates = row.templates;
+        schema.roles = row.roles;
+        schema.competitions = row.competitions;
+        schemaState = row.templates && row.roles && row.competitions ? 'ready' : 'partial';
+      }
     } catch {
-      schema = 'missing';
+      schemaState = 'missing';
     }
   }
 
-  const healthy = databaseCheck.reachable === true && schema === 'ready';
+  const healthy = databaseCheck.reachable === true && schemaState === 'ready';
 
   return json(
     {
@@ -25,7 +50,8 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
       app: 'tosder-communities',
       checks: {
         database: databaseCheck,
-        schema,
+        schema: schemaState,
+        features: schema,
       },
       latencyMs: Math.round(performance.now() - startedAt),
       release: process.env.RELEASE ?? process.env.NODE_ENV ?? 'development',
