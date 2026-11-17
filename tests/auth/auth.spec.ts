@@ -1,9 +1,14 @@
 import { expect, test } from '@playwright/test';
+import { config } from 'dotenv';
+
+config({ path: '.env.local' });
 
 const email = `auth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-const password = 'TosderTest123!';
+const password = process.env.E2E_TEST_PASSWORD ?? '';
 
 test.describe.serial('member authentication', () => {
+  test.skip(!password, 'Set E2E_TEST_PASSWORD to run authenticated tests.');
+
   test('signs up and lands on the protected account page', async ({ page }) => {
     await page.goto('/sign-up');
 

@@ -1,7 +1,10 @@
 import { expect, type Page } from '@playwright/test';
+import { config } from 'dotenv';
 
-export const adminEmail = 'admin@example.com';
-export const adminPassword = 'AdminTest123!';
+config({ path: '.env.local' });
+
+export const adminEmail = process.env.E2E_TEST_EMAIL ?? 'admin@example.com';
+export const adminPassword = process.env.E2E_TEST_PASSWORD ?? '';
 
 async function attemptSignIn(page: Page) {
   await page.goto('/sign-in');
@@ -15,6 +18,9 @@ async function attemptSignIn(page: Page) {
 }
 
 export async function ensureAdmin(page: Page) {
+  if (!adminPassword) {
+    throw new Error('Set E2E_TEST_PASSWORD in .env.local or the test environment.');
+  }
   if (await attemptSignIn(page)) return;
   if (await attemptSignIn(page)) return;
 
