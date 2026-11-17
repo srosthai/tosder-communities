@@ -6,18 +6,18 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
   const startedAt = performance.now();
   const databaseCheck = await checkDatabase();
 
-  let todosTable: 'available' | 'missing' | 'unknown' = 'unknown';
+  let schema: 'ready' | 'missing' | 'unknown' = 'unknown';
 
   if (databaseCheck.reachable) {
     try {
-      await getPrisma().todo.count();
-      todosTable = 'available';
+      await getPrisma().$queryRaw`SELECT 1 FROM travel_templates LIMIT 1`;
+      schema = 'ready';
     } catch {
-      todosTable = 'missing';
+      schema = 'missing';
     }
   }
 
-  const healthy = databaseCheck.reachable === true && todosTable === 'available';
+  const healthy = databaseCheck.reachable === true && schema === 'ready';
 
   return json(
     {
@@ -25,7 +25,7 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
       app: 'tosder-communities',
       checks: {
         database: databaseCheck,
-        todosTable,
+        schema,
       },
       latencyMs: Math.round(performance.now() - startedAt),
       release: process.env.RELEASE ?? process.env.NODE_ENV ?? 'development',
