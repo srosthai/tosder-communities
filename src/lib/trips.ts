@@ -3,6 +3,7 @@ import type { TemplateItemType, TripStatus } from '@prisma/client';
 import { getPrisma } from '../db/prisma';
 import { ApiError } from './api';
 import { findScheduleConflicts } from './template-builder';
+import { decideUsageEvent } from './usage';
 
 export type TripPhase = 'draft' | 'upcoming' | 'current' | 'past' | 'archived';
 
@@ -101,6 +102,26 @@ export async function copyTemplateToTrip(input: CopyTemplateInput) {
     });
   }
 
+  const occurredAt = new Date();
+  const periodKey = occurredAt.toISOString().slice(0, 7);
+  const existingUse = await prisma.usageEvent.findFirst({
+    where: {
+      userId: input.actor.id,
+      templateId: template.id,
+      periodKey,
+    },
+    select: { id: true },
+  });
+  const selfUse = template.creatorId === input.actor.id;
+  const duplicateUse = Boolean(existingUse);
+  const initialStatus = selfUse || duplicateUse ? 'INVALID' : 'PENDING';
+  const eventPeriodKey = selfUse || duplicateUse ? null : periodKey;
+  const decisionReason = selfUse
+    ? 'Self-use is excluded from qualified usage.'
+    : duplicateUse
+      ? 'Another qualified-use candidate already exists for this template and month.'
+      : null;
+
   const snapshot = template.publishedVersion.snapshot as {
     template: {
       title: string;
@@ -198,12 +219,18 @@ export async function copyTemplateToTrip(input: CopyTemplateInput) {
           templateVersionId: template.publishedVersion!.id,
           tripId: created.id,
           eventType: 'template_copy',
-          status: 'PENDING',
+          status: initialStatus,
           requestId: input.requestId ?? null,
           idempotencyKey: key,
+          periodKey: eventPeriodKey,
+          ruleVersion: 'v1',
+          decidedAt: initialStatus === 'INVALID' ? occurredAt : null,
+          decisionReason,
           metadata: {
             templateSlug: template.slug,
             versionNumber: template.publishedVersion!.versionNumber,
+            period: periodKey,
+            ...(existingUse ? { duplicateOf: existingUse.id } : {}),
           },
         },
       });
@@ -226,6 +253,18 @@ export async function copyTemplateToTrip(input: CopyTemplateInput) {
 
       return created;
     });
+
+    const usageEvent = await prisma.usageEvent.findUnique({
+      where: { tripId: trip.id },
+      select: { id: true, status: true },
+    });
+    if (usageEvent?.status === 'PENDING') {
+      try {
+        await decideUsageEvent(usageEvent.id);
+      } catch {
+        // The copy is committed; the engine can retry the pending event later.
+      }
+    }
 
     return { trip, created: true };
   } catch (error) {

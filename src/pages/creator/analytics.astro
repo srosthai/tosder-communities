@@ -1,0 +1,464 @@
+---
+import { ArrowLeft, BarChart3, Eye, Heart, LayoutTemplate, Route, Save, Target } from '@lucide/astro';
+import PublicPage from '../../components/public/PublicPage.astro';
+import PublicButton from '../../components/public/PublicButton.astro';
+import Badge from '../../components/ui/Badge.astro';
+import { getSessionUser } from '../../lib/auth-user';
+import { ensureMemberProfile } from '../../lib/profiles';
+import { getCreatorAnalytics, parseAnalyticsRange } from '../../lib/analytics';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+await ensureMemberProfile(user);
+
+const range = parseAnalyticsRange(
+  Astro.url.searchParams.get('from'),
+  Astro.url.searchParams.get('to'),
+);
+const analytics = await getCreatorAnalytics(user.id, range);
+const maxDaily = Math.max(1, ...analytics.daily.map((day) => day.views));
+
+const fromValue = range.from.toISOString().slice(0, 10);
+const toValue = range.to.toISOString().slice(0, 10);
+const rangeLabel = `${range.from.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' })} – ${range.to.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`;
+---
+
+<PublicPage
+  label="Creator analytics"
+  title="How your templates are doing."
+  description="Aggregate views, likes, saves, qualified uses, and review feedback. Traveler identities are never shown."
+  noindex
+>
+  <div slot="actions" class="header-actions">
+    <PublicButton href="/creator" variant="secondary">
+      <ArrowLeft size={14} stroke-width={2} />
+      Creator Studio
+    </PublicButton>
+  </div>
+
+  <form method="get" class="range-form">
+    <label>
+      <span>From</span>
+      <input type="date" name="from" value={fromValue} />
+    </label>
+    <label>
+      <span>To</span>
+      <input type="date" name="to" value={toValue} />
+    </label>
+    <button type="submit">Apply range</button>
+    <span class="range-label">{rangeLabel}</span>
+  </form>
+
+  <div class="stats-grid">
+    <article class="stat">
+      <span class="stat__icon"><LayoutTemplate size={16} stroke-width={1.75} /></span>
+      <span class="stat__label">Published templates</span>
+      <strong>{analytics.totals.published}</strong>
+    </article>
+    <article class="stat">
+      <span class="stat__icon"><Eye size={16} stroke-width={1.75} /></span>
+      <span class="stat__label">Views</span>
+      <strong>{analytics.totals.viewsDisplay}</strong>
+    </article>
+    <article class="stat">
+      <span class="stat__icon"><Heart size={16} stroke-width={1.75} /></span>
+      <span class="stat__label">Likes</span>
+      <strong>{analytics.totals.likesDisplay}</strong>
+    </article>
+    <article class="stat">
+      <span class="stat__icon"><Save size={16} stroke-width={1.75} /></span>
+      <span class="stat__label">Saves</span>
+      <strong>{analytics.totals.savesDisplay}</strong>
+    </article>
+    <article class="stat stat--accent">
+      <span class="stat__icon"><Route size={16} stroke-width={1.75} /></span>
+      <span class="stat__label">Qualified uses</span>
+      <strong>{analytics.totals.qualifiedUsesDisplay}</strong>
+    </article>
+    <article class="stat">
+      <span class="stat__icon"><Target size={16} stroke-width={1.75} /></span>
+      <span class="stat__label">View → qualified use</span>
+      <strong>{analytics.totals.conversion}</strong>
+    </article>
+  </div>
+
+  <p class="privacy-note">
+    Small cohorts are suppressed or rounded. Qualified uses count only completed
+    template copies that pass the usage rules. Competition rank will appear when a
+    period is active.
+  </p>
+
+  {analytics.templates.length === 0 ? (
+    <div class="empty">
+      <BarChart3 size={22} stroke-width={1.75} />
+      <h2>No templates to analyse yet.</h2>
+      <p>Publish your first template to start seeing views, saves, and qualified uses.</p>
+      <PublicButton href="/creator">Open Creator Studio</PublicButton>
+    </div>
+  ) : (
+    <>
+      <section class="panel" aria-labelledby="daily-heading">
+        <div class="panel-heading">
+          <h2 id="daily-heading">Views over time</h2>
+          <span>{analytics.totals.viewsDisplay} total</span>
+        </div>
+        <div class="chart" aria-label="Daily views chart">
+          {analytics.daily.map((day) => (
+            <span
+              class="chart__bar"
+              style={`height: ${Math.max(2, (day.views / maxDaily) * 100)}%`}
+              title={`${day.date}: ${day.views} views`}
+            ></span>
+          ))}
+        </div>
+        <div class="chart__axis">
+          <span>{analytics.daily[0]?.date}</span>
+          <span>{analytics.daily[analytics.daily.length - 1]?.date}</span>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="table-heading">
+        <div class="panel-heading">
+          <h2 id="table-heading">Per-template performance</h2>
+          <span>{analytics.templates.length} templates</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Template</th>
+                <th scope="col">Status</th>
+                <th scope="col">Views</th>
+                <th scope="col">Likes</th>
+                <th scope="col">Saves</th>
+                <th scope="col">Use started</th>
+                <th scope="col">Qualified</th>
+                <th scope="col">Conversion</th>
+                <th scope="col">Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analytics.templates.map((template) => (
+                <tr>
+                  <td>
+                    <a href={`/creator/templates/${template.id}`}>{template.title}</a>
+                    {template.versionNumber && <span class="version">v{template.versionNumber}</span>}
+                  </td>
+                  <td><Badge variant={template.status === 'PUBLISHED' ? 'success' : 'neutral'} dot>{template.status}</Badge></td>
+                  <td class="numeric">{template.viewsDisplay}</td>
+                  <td class="numeric">{template.likesDisplay}</td>
+                  <td class="numeric">{template.savesDisplay}</td>
+                  <td class="numeric">{template.useStartedDisplay}</td>
+                  <td class="numeric">{template.qualifiedUsesDisplay}</td>
+                  <td class="numeric">{template.conversion}</td>
+                  <td class="numeric">
+                    {template.rating != null ? `★ ${template.rating.toFixed(1)} (${template.reviewCount})` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="reviews-heading">
+        <div class="panel-heading">
+          <h2 id="reviews-heading">Recent review feedback</h2>
+          <span>{analytics.totals.reviewCount} visible reviews</span>
+        </div>
+        {analytics.recentReviews.length === 0 ? (
+          <p class="muted">No reviews yet. Reviews open after travelers complete a copied trip.</p>
+        ) : (
+          <ul class="review-list">
+            {analytics.recentReviews.map((review) => (
+              <li>
+                <div class="review-head">
+                  <strong>{review.templateTitle}</strong>
+                  <span>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+                  <time datetime={review.createdAt.toISOString()}>
+                    {review.createdAt.toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                  </time>
+                </div>
+                {review.body && <p>{review.body}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
+  )}
+</PublicPage>
+
+<style>
+  .header-actions {
+    margin-top: var(--space-4);
+  }
+
+  .range-form {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .range-form label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .range-form label span {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .range-form input {
+    height: var(--control-height-md);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .range-form button {
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .range-label {
+    margin-left: auto;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .stat--accent {
+    border-color: color-mix(in oklch, var(--color-accent) 32%, var(--color-border));
+    background: color-mix(in oklch, var(--color-accent) 6%, var(--color-surface));
+  }
+
+  .stat__icon {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+  }
+
+  .stat__label {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .stat strong {
+    font-family: var(--font-mono);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+  }
+
+  .privacy-note {
+    margin-bottom: var(--space-4);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-8);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    text-align: center;
+  }
+
+  .empty h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .empty p {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .panel {
+    margin-bottom: var(--space-4);
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+  }
+
+  .panel-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .panel-heading h2 {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .panel-heading span {
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 8rem;
+    padding-top: var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .chart__bar {
+    flex: 1;
+    min-width: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--color-accent);
+    opacity: 0.75;
+  }
+
+  .chart__bar:hover {
+    opacity: 1;
+  }
+
+  .chart__axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--space-1);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  th {
+    padding: var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+  }
+
+  td a {
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .version {
+    margin-left: var(--space-1);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .review-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .review-list li {
+    padding: var(--space-2) 0;
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .review-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .review-head span {
+    color: var(--color-warning-text);
+  }
+
+  .review-list p {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .muted {
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 700px) {
+    .range-label {
+      margin-left: 0;
+      width: 100%;
+    }
+  }
+</style>
