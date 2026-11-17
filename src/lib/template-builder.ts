@@ -6,7 +6,7 @@ import type {
 } from '@prisma/client';
 import { getPrisma } from '../db/prisma';
 import { ApiError } from './api';
-import { slugifyTemplate } from './templates';
+import { slugifyTemplate } from './template-slug';
 
 export const builderSteps = [
   {
@@ -91,6 +91,7 @@ export const itemTypeLabels: Record<TemplateItem['type'], string> = {
 
 export type BuilderTemplate = TravelTemplate & {
   province: { id: string; name: string; slug: string } | null;
+  publishedVersion: { id: string; versionNumber: number; createdAt: Date } | null;
   days: Array<
     TemplateDay & {
       items: Array<
@@ -341,7 +342,7 @@ export async function saveTemplateMetadata(
   creatorId: string,
   input: MetadataInput,
 ) {
-  await requireOwnedTemplate(id, creatorId);
+  const existing = await requireOwnedTemplate(id, creatorId);
 
   if (
     input.budgetMinCents != null &&
@@ -357,7 +358,9 @@ export async function saveTemplateMetadata(
 
   const data: MetadataInput = { ...input };
 
-  if (data.slug !== undefined) {
+  if (data.slug !== undefined && existing.publishedVersionId) {
+    delete data.slug;
+  } else if (data.slug !== undefined) {
     const slug = slugifyTemplate(data.slug);
     if (!slug) {
       delete data.slug;

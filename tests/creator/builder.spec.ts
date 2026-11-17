@@ -1,12 +1,11 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { expect, test } from '@playwright/test';
+import { adminPassword, ensureAdmin } from '../helpers/auth';
 import { config } from 'dotenv';
 
 config({ path: '.env.local' });
 
-const adminEmail = 'admin@example.com';
-const adminPassword = 'AdminTest123!';
 const stamp = Date.now();
 const title = `Builder test ${stamp}`;
 
@@ -16,25 +15,6 @@ async function waitForAutosave(page: import('@playwright/test').Page) {
   await expect(state).toHaveText('Saved', { timeout: 10_000 });
 }
 
-async function ensureAdmin(page: import('@playwright/test').Page) {
-  await page.goto('/sign-in');
-  await page.getByLabel('Email address').fill(adminEmail);
-  await page.getByLabel('Password', { exact: true }).fill(adminPassword);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-
-  await page.waitForURL(/\/account$/, { timeout: 5000 }).catch(() => undefined);
-
-  if (new URL(page.url()).pathname === '/sign-in') {
-    await page.goto('/sign-up');
-    await page.getByLabel('Display name').fill('Content Admin');
-    await page.getByLabel('Email address').fill(adminEmail);
-    await page.getByLabel('Password', { exact: true }).fill(adminPassword);
-    await page.getByLabel('Confirm password').fill(adminPassword);
-    await page.getByRole('button', { name: 'Create account' }).click();
-  }
-
-  await expect(page).toHaveURL(/\/account$/);
-}
 
 test.afterAll(async () => {
   const prisma = new PrismaClient({

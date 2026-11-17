@@ -221,6 +221,7 @@ model MemberProfile {
   bio         String?
   avatarUrl   String?  @map("avatar_url")
   socialLinks Json?    @map("social_links")
+  trustedCreator Boolean @default(false) @map("trusted_creator")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -328,6 +329,7 @@ model TemplateVersion {
   createdById   String   @map("created_by_id")
   snapshot      Json
   validation    Json?
+  contentHash   String?  @map("content_hash")
   changeNote    String?  @map("change_note")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -335,6 +337,7 @@ model TemplateVersion {
   publishedTemplate TravelTemplate? @relation("PublishedVersion")
 
   @@unique([templateId, versionNumber])
+  @@unique([templateId, contentHash])
   @@index([templateId])
   @@index([createdAt])
   @@map("template_versions")

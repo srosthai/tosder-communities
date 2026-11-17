@@ -1,33 +1,51 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { expect, test } from '@playwright/test';
+import { adminPassword, ensureAdmin } from '../helpers/auth';
 import { config } from 'dotenv';
 
 config({ path: '.env.local' });
 
-const adminEmail = 'admin@example.com';
-const adminPassword = 'AdminTest123!';
 const stamp = Date.now();
 const prefixes = [`Studio test ${stamp}`, `API studio test ${stamp}`];
 
-async function ensureAdmin(page: import('@playwright/test').Page) {
-  await page.goto('/sign-in');
-  await page.getByLabel('Email address').fill(adminEmail);
-  await page.getByLabel('Password', { exact: true }).fill(adminPassword);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-
-  await page.waitForURL(/\/account$/, { timeout: 5000 }).catch(() => undefined);
-
-  if (new URL(page.url()).pathname === '/sign-in') {
-    await page.goto('/sign-up');
-    await page.getByLabel('Display name').fill('Content Admin');
-    await page.getByLabel('Email address').fill(adminEmail);
-    await page.getByLabel('Password', { exact: true }).fill(adminPassword);
-    await page.getByLabel('Confirm password').fill(adminPassword);
-    await page.getByRole('button', { name: 'Create account' }).click();
-  }
-
-  await expect(page).toHaveURL(/\/account$/);
+async function completeTemplate(templateId: string) {
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
+  const province = await prisma.province.findUnique({
+    where: { slug: 'siem-reap' },
+    select: { id: true },
+  });
+  await prisma.travelTemplate.update({
+    where: { id: templateId },
+    data: {
+      summary: 'A complete test itinerary.',
+      provinceId: province?.id,
+      style: 'Slow travel',
+      season: 'November to March',
+      transport: ['Tuk-tuk'],
+      audience: ['Couples'],
+      durationDays: 1,
+    },
+  });
+  await prisma.templateDay.create({
+    data: {
+      templateId,
+      dayNumber: 1,
+      title: 'Day 1',
+      items: {
+        create: {
+          title: 'Morning walk',
+          type: 'ATTRACTION',
+          startTime: '09:00',
+          endTime: '10:30',
+          sortOrder: 0,
+        },
+      },
+    },
+  });
+  await prisma.$disconnect();
 }
 
 test.afterAll(async () => {
@@ -102,6 +120,7 @@ test.describe.serial('Creator Studio', () => {
     await page.getByLabel('Province').selectOption({ label: 'Siem Reap' });
     await page.getByRole('button', { name: 'Save and continue' }).click();
     await expect(page).toHaveURL(/step=details/);
+    await completeTemplate(templateId!);
 
     await page.goto('/creator');
     const row = page.locator(`[data-template-id="${templateId}"]`);
@@ -149,6 +168,12 @@ test.describe.serial('Creator Studio', () => {
     const body = await created.json();
     const id = body.data.id as string;
     expect(body.data.status).toBe('DRAFT');
+
+    const incomplete = await page.request.post(`/api/creator/templates/${id}/submit-review`);
+    expect(incomplete.status()).toBe(422);
+    expect((await incomplete.json()).error.code).toBe('validation_error');
+
+    await completeTemplate(id);
 
     const submitted = await page.request.post(`/api/creator/templates/${id}/submit-review`);
     expect(submitted.status()).toBe(200);

@@ -1,6 +1,8 @@
 import type { Prisma, TemplateStatus } from '@prisma/client';
 import { getPrisma } from '../db/prisma';
 import { ApiError } from './api';
+import { slugifyTemplate } from './template-slug';
+import { validateTemplate, type BuilderTemplate } from './template-builder';
 
 export const templateStatuses = [
   'DRAFT',
@@ -46,15 +48,6 @@ export const templateStatusMeta: Record<
     variant: 'neutral',
   },
 };
-
-export function slugifyTemplate(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 90);
-}
 
 async function uniqueTemplateSlug(base: string, excludeId?: string): Promise<string> {
   const prisma = getPrisma();
@@ -345,18 +338,46 @@ export async function restoreTemplate(
   return restored;
 }
 
+export interface SubmitReviewOptions {
+  emailVerified: boolean;
+  allowUnverified?: boolean;
+}
+
 export async function submitTemplateForReview(
   id: string,
   creatorId: string,
   actor: { id: string; email: string },
+  options: SubmitReviewOptions,
 ) {
-  const template = await requireOwnedTemplate(id, creatorId);
+  const template = await getCreatorTemplate(id, creatorId);
+
+  if (!template) {
+    throw new ApiError({
+      status: 404,
+      code: 'not_found',
+      message: 'Template not found.',
+    });
+  }
 
   if (template.status !== 'DRAFT' && template.status !== 'REJECTED') {
     throw new ApiError({
       status: 409,
       code: 'invalid_transition',
       message: 'Only a draft or a rejected template can be submitted for review.',
+    });
+  }
+
+  const validation = validateTemplate(template as BuilderTemplate, {
+    emailVerified: options.emailVerified || Boolean(options.allowUnverified),
+    status: template.status,
+  });
+
+  if (validation.blocking.length > 0) {
+    throw new ApiError({
+      status: 422,
+      code: 'validation_error',
+      message: validation.blocking[0] ?? 'The template is not ready for review.',
+      details: validation.blocking.map((message) => ({ message })),
     });
   }
 
@@ -370,6 +391,7 @@ export async function submitTemplateForReview(
 
   await recordAudit(actor, 'template.submitted', id, `Submitted ${template.title} for review`, {
     previousStatus: template.status,
+    warnings: validation.warnings,
   });
 
   return submitted;

@@ -1,6 +1,7 @@
 import { config } from 'dotenv';
 config({ path: '.env.local', quiet: true });
 
+import { createHash } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
@@ -755,6 +756,494 @@ async function main() {
         sortOrder: itemIndex,
       })),
       skipDuplicates: true,
+    });
+  }
+
+
+  const templateCreators = [
+    {
+      userId: 'seed-creator-dara-lim',
+      username: 'dara-lim',
+      displayName: 'Dara Lim',
+      bio: 'Slow traveler, Kampot regular, and a firm believer that the best itinerary leaves room for a long lunch.',
+      socialLinks: { website: 'https://example.com/dara-lim' },
+    },
+  ];
+
+  for (const creator of templateCreators) {
+    await prisma.memberProfile.upsert({
+      where: { userId: creator.userId },
+      update: {
+        username: creator.username,
+        displayName: creator.displayName,
+        bio: creator.bio,
+        socialLinks: creator.socialLinks,
+      },
+      create: {
+        userId: creator.userId,
+        username: creator.username,
+        displayName: creator.displayName,
+        bio: creator.bio,
+        socialLinks: creator.socialLinks,
+        trustedCreator: true,
+      },
+    });
+  }
+
+  const destinationBySlug = new Map(destinations.map((destination) => [destination.slug, destination]));
+  const provinceNameBySlug = new Map(provinces.map((province) => [province.slug, province.name]));
+
+  const templateFixtures = [
+    {
+      title: 'Kampot slow weekend',
+      slug: 'kampot-slow-weekend',
+      creatorId: 'seed-creator-dara-lim',
+      province: 'kampot',
+      summary: 'Two unhurried days between the river, the mountain road, and a pepper farm.',
+      description:
+        'A weekend for travelers who would rather see three things properly than rush through ten. The route stays close to Kampot, uses a tuk-tuk for the mountain and a bicycle for the flat riverside roads, and leaves the evenings free.',
+      durationDays: 2,
+      budgetMinCents: 9000,
+      budgetMaxCents: 16000,
+      style: 'Slow travel',
+      season: 'November to March',
+      logisticsNotes:
+        'Book the Bokor mountain transport the night before. The pepper farm is easiest by tuk-tuk; the riverside loop is flat and shaded in the early morning.',
+      transport: ['Tuk-tuk', 'Bicycle'],
+      audience: ['Couples', 'Slow travelers'],
+      viewCount: 184,
+      saveCount: 23,
+      qualifiedUseCount: 7,
+      days: [
+        {
+          title: 'River morning and the mountain road',
+          summary: 'Start flat, then climb into the cooler air above the coast.',
+          items: [
+            {
+              title: 'Riverside breakfast',
+              type: 'FOOD',
+              destination: 'kampot-riverside',
+              startTime: '08:00',
+              endTime: '09:30',
+              durationMinutes: 90,
+              estimatedCostCents: 800,
+              description: 'Coffee, noodles, and a slow start by the water before the day heats up.',
+              practicalTips: 'Most riverside kitchens are busiest just after 08:00. Arrive early or expect a short wait.',
+            },
+            {
+              title: 'Bokor Mountain lookout',
+              type: 'ATTRACTION',
+              destination: 'bokor-mountain',
+              startTime: '10:30',
+              endTime: '14:30',
+              durationMinutes: 240,
+              estimatedCostCents: 2500,
+              description: 'A long, cool drive with old buildings and wide views over the coast.',
+              practicalTips: 'Bring a layer; the top is noticeably cooler and can be inside cloud.',
+            },
+            {
+              title: 'Dinner by the river',
+              type: 'FOOD',
+              destination: 'kampot-riverside',
+              startTime: '18:30',
+              endTime: '20:00',
+              durationMinutes: 90,
+              estimatedCostCents: 1200,
+              description: 'Keep the evening simple and eat close to where you are staying.',
+              practicalTips: 'Ask your guesthouse which kitchens are open late in low season.',
+            },
+          ],
+        },
+        {
+          title: 'Pepper, coast road, and Kep',
+          summary: 'A short loop through the pepper farms and the quieter side of the coast.',
+          items: [
+            {
+              title: 'La Plantation pepper tour',
+              type: 'ATTRACTION',
+              destination: 'la-plantation-pepper-farm',
+              startTime: '09:00',
+              endTime: '11:00',
+              durationMinutes: 120,
+              estimatedCostCents: 1000,
+              description: 'Walk the pepper fields and taste the difference between the varieties.',
+              practicalTips: 'Reserve a tour in high season and leave room in your bag for a jar or two.',
+            },
+            {
+              title: 'Kep crab market lunch',
+              type: 'FOOD',
+              destination: 'kep-crab-market',
+              startTime: '12:00',
+              endTime: '13:30',
+              durationMinutes: 90,
+              estimatedCostCents: 1800,
+              description: 'A straightforward seafood lunch and a walk along the waterfront.',
+              practicalTips: 'Confirm the price before the crab goes in the pot.',
+            },
+            {
+              title: 'Kep National Park loop',
+              type: 'ATTRACTION',
+              destination: 'kep-national-park',
+              startTime: '15:00',
+              endTime: '17:00',
+              durationMinutes: 120,
+              estimatedCostCents: 500,
+              description: 'A shaded walk on the ridge behind town with occasional sea views.',
+              practicalTips: 'Use the marked trails and carry water; some sections are steep.',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Angkor first light',
+      slug: 'angkor-first-light',
+      creatorId: 'seed-creator-dara-lim',
+      province: 'siem-reap',
+      summary: 'A two-day first visit built around sunrise, long galleries, and a quiet afternoon.',
+      description:
+        'The first visit to the Angkor area does not need to be a checklist. This plan uses two mornings for the temples, keeps the middle of the day slow, and leaves time for the smaller, quieter sites.',
+      durationDays: 2,
+      budgetMinCents: 12000,
+      budgetMaxCents: 22000,
+      style: 'Classic sightseeing',
+      season: 'November to March',
+      logisticsNotes:
+        'Arrange a tuk-tuk for both sunrise starts. Buy the pass before the first morning and keep it with you. The days are hot by 11:00, so plan a real break.',
+      transport: ['Tuk-tuk', 'Walking'],
+      audience: ['First-time visitors', 'Couples'],
+      viewCount: 326,
+      saveCount: 41,
+      qualifiedUseCount: 12,
+      days: [
+        {
+          title: 'Sunrise and the outer galleries',
+          summary: 'Start before dawn, then slow down.',
+          items: [
+            {
+              title: 'Sunrise at Angkor Wat',
+              type: 'ATTRACTION',
+              destination: 'angkor-wat',
+              startTime: '05:00',
+              endTime: '08:30',
+              durationMinutes: 210,
+              estimatedCostCents: 3700,
+              description: 'Watch the light come up and walk the outer galleries before the largest groups arrive.',
+              practicalTips: 'Bring a torch and dress respectfully. The best reflection is not always at the main pool.',
+            },
+            {
+              title: 'Late breakfast',
+              type: 'FOOD',
+              destination: 'siem-reap-old-market',
+              startTime: '09:30',
+              endTime: '10:30',
+              durationMinutes: 60,
+              estimatedCostCents: 700,
+              description: 'Reset with coffee and a proper breakfast in town.',
+              practicalTips: 'Keep the rest of the morning free if you started before 05:00.',
+            },
+            {
+              title: 'Ta Prohm in the afternoon',
+              type: 'ATTRACTION',
+              destination: 'ta-prohm',
+              startTime: '15:30',
+              endTime: '17:30',
+              durationMinutes: 120,
+              estimatedCostCents: 0,
+              description: 'Trees, stone, and a slower pace after the morning crowds have moved on.',
+              practicalTips: 'The paths are uneven; watch your footing around the roots.',
+            },
+          ],
+        },
+        {
+          title: 'Carved stone and the lake',
+          summary: 'A smaller temple, then the water and a quiet evening.',
+          items: [
+            {
+              title: 'Banteay Srei',
+              type: 'ATTRACTION',
+              destination: 'banteay-srei',
+              startTime: '07:30',
+              endTime: '09:30',
+              durationMinutes: 120,
+              estimatedCostCents: 0,
+              description: 'Fine pink sandstone carvings in a compact, walkable temple.',
+              practicalTips: 'Go early; the site is small and fills quickly.',
+            },
+            {
+              title: 'Tonle Sap floating villages',
+              type: 'ATTRACTION',
+              destination: 'tonle-sap-floating-villages',
+              startTime: '14:00',
+              endTime: '17:00',
+              durationMinutes: 180,
+              estimatedCostCents: 2500,
+              description: 'See how the lake communities move with the water.',
+              practicalTips: 'Use a community-based operator and ask before photographing people.',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Coast and islands reset',
+      slug: 'coast-and-islands-reset',
+      creatorId: 'seed-creator-dara-lim',
+      province: 'preah-sihanouk',
+      summary: 'Three days of sand, mangrove creeks, and not very much else.',
+      description:
+        'A short coastal reset that does not try to cover every beach. One island night, one quiet mainland base, and a slow loop through Ream.',
+      durationDays: 3,
+      budgetMinCents: 18000,
+      budgetMaxCents: 32000,
+      style: 'Coast and islands',
+      season: 'December to April',
+      logisticsNotes:
+        'Book the island boat in advance and keep the return day flexible if the weather turns. Bring cash for the island; ATMs are unreliable.',
+      transport: ['Boat', 'Tuk-tuk', 'Walking'],
+      audience: ['Couples', 'Friends'],
+      viewCount: 241,
+      saveCount: 35,
+      qualifiedUseCount: 9,
+      days: [
+        {
+          title: 'Slow boat to Koh Rong',
+          summary: 'Trade the mainland road for the island track.',
+          items: [
+            {
+              title: 'Morning boat to Koh Rong',
+              type: 'TRANSPORT',
+              destination: 'koh-rong',
+              startTime: '09:00',
+              endTime: '10:30',
+              durationMinutes: 90,
+              estimatedCostCents: 1500,
+              description: 'Pick a boat that matches your guesthouse and keep your bags dry.',
+              practicalTips: 'Confirm the return time before you leave the pier.',
+            },
+            {
+              title: 'Beach afternoon',
+              type: 'REST',
+              destination: 'koh-rong',
+              startTime: '13:00',
+              endTime: '18:00',
+              estimatedCostCents: 0,
+              description: 'Swim, read, and do very little.',
+              practicalTips: 'The sun is strong; shade and water are not always close together.',
+            },
+          ],
+        },
+        {
+          title: 'Island morning, mainland evening',
+          summary: 'A last swim, then back to the coast.',
+          items: [
+            {
+              title: 'Sunrise walk',
+              type: 'ATTRACTION',
+              destination: 'koh-rong',
+              startTime: '06:30',
+              endTime: '07:30',
+              estimatedCostCents: 0,
+              description: 'Walk the beach before the day boats arrive.',
+              practicalTips: 'Carry a torch if you are staying at the far end of the beach.',
+            },
+            {
+              title: 'Return boat and Otres Beach',
+              type: 'TRANSPORT',
+              destination: 'otres-beach',
+              startTime: '12:00',
+              endTime: '16:00',
+              durationMinutes: 240,
+              estimatedCostCents: 1800,
+              description: 'Return to the mainland and settle into a slower beach base.',
+              practicalTips: 'Keep the afternoon loose; boats can run late.',
+            },
+          ],
+        },
+        {
+          title: 'Mangroves and the road home',
+          summary: 'A short nature stop before the journey onward.',
+          items: [
+            {
+              title: 'Ream National Park creek',
+              type: 'ATTRACTION',
+              destination: 'ream-national-park',
+              startTime: '08:00',
+              endTime: '11:30',
+              durationMinutes: 210,
+              estimatedCostCents: 2000,
+              description: 'A quiet boat trip through the mangroves with a local guide.',
+              practicalTips: 'Bring insect repellent and check the tide before booking.',
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
+  function buildTemplateSnapshot(fixture) {
+    return {
+      template: {
+        title: fixture.title,
+        slug: fixture.slug,
+        summary: fixture.summary,
+        description: fixture.description,
+        coverPhotoUrl: image,
+        durationDays: fixture.durationDays,
+        budgetMinCents: fixture.budgetMinCents,
+        budgetMaxCents: fixture.budgetMaxCents,
+        currency: 'USD',
+        style: fixture.style,
+        season: fixture.season,
+        logisticsNotes: fixture.logisticsNotes,
+        transport: fixture.transport,
+        audience: fixture.audience,
+        language: 'en',
+        province: {
+          name: provinceNameBySlug.get(fixture.province),
+          slug: fixture.province,
+        },
+      },
+      days: fixture.days.map((day, dayIndex) => ({
+        dayNumber: dayIndex + 1,
+        title: day.title,
+        summary: day.summary,
+        items: day.items.map((item) => {
+          const destination = destinationBySlug.get(item.destination);
+          return {
+            title: item.title,
+            type: item.type,
+            destinationSlug: item.destination,
+            destinationName: destination?.name ?? item.destination,
+            destinationProvince: destination
+              ? provinceNameBySlug.get(destination.province) ?? 'Cambodia'
+              : 'Cambodia',
+            destinationLatitude: destination?.latitude ?? null,
+            destinationLongitude: destination?.longitude ?? null,
+            description: item.description,
+            practicalTips: item.practicalTips,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            durationMinutes: item.durationMinutes ?? null,
+            estimatedCostCents: item.estimatedCostCents ?? null,
+            currency: 'USD',
+            photoUrl: null,
+          };
+        }),
+      })),
+    };
+  }
+
+  for (const fixture of templateFixtures) {
+    const province = await prisma.province.findUnique({
+      where: { slug: fixture.province },
+      select: { id: true },
+    });
+
+    const template = await prisma.travelTemplate.upsert({
+      where: { slug: fixture.slug },
+      update: {
+        creatorId: fixture.creatorId,
+        title: fixture.title,
+        summary: fixture.summary,
+        description: fixture.description,
+        provinceId: province?.id,
+        coverPhotoUrl: image,
+        durationDays: fixture.durationDays,
+        budgetMinCents: fixture.budgetMinCents,
+        budgetMaxCents: fixture.budgetMaxCents,
+        style: fixture.style,
+        season: fixture.season,
+        logisticsNotes: fixture.logisticsNotes,
+        transport: fixture.transport,
+        audience: fixture.audience,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+        viewCount: fixture.viewCount,
+        saveCount: fixture.saveCount,
+        qualifiedUseCount: fixture.qualifiedUseCount,
+      },
+      create: {
+        creatorId: fixture.creatorId,
+        title: fixture.title,
+        slug: fixture.slug,
+        summary: fixture.summary,
+        description: fixture.description,
+        provinceId: province?.id,
+        coverPhotoUrl: image,
+        durationDays: fixture.durationDays,
+        budgetMinCents: fixture.budgetMinCents,
+        budgetMaxCents: fixture.budgetMaxCents,
+        style: fixture.style,
+        season: fixture.season,
+        logisticsNotes: fixture.logisticsNotes,
+        transport: fixture.transport,
+        audience: fixture.audience,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+        viewCount: fixture.viewCount,
+        saveCount: fixture.saveCount,
+        qualifiedUseCount: fixture.qualifiedUseCount,
+      },
+    });
+
+    await prisma.templateDay.deleteMany({ where: { templateId: template.id } });
+    for (const [dayIndex, day] of fixture.days.entries()) {
+      await prisma.templateDay.create({
+        data: {
+          templateId: template.id,
+          dayNumber: dayIndex + 1,
+          title: day.title,
+          summary: day.summary,
+          items: {
+            create: day.items.map((item, itemIndex) => ({
+              destinationId: destinationIds.get(item.destination),
+              title: item.title,
+              type: item.type,
+              description: item.description,
+              practicalTips: item.practicalTips,
+              startTime: item.startTime,
+              endTime: item.endTime,
+              durationMinutes: item.durationMinutes ?? null,
+              estimatedCostCents: item.estimatedCostCents ?? null,
+              sortOrder: itemIndex,
+            })),
+          },
+        },
+      });
+    }
+
+    const snapshot = buildTemplateSnapshot(fixture);
+    const contentHash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+    let version = await prisma.templateVersion.findFirst({
+      where: { templateId: template.id, contentHash },
+    });
+
+    if (!version) {
+      const latest = await prisma.templateVersion.findFirst({
+        where: { templateId: template.id },
+        orderBy: { versionNumber: 'desc' },
+        select: { versionNumber: true },
+      });
+      version = await prisma.templateVersion.create({
+        data: {
+          templateId: template.id,
+          versionNumber: (latest?.versionNumber ?? 0) + 1,
+          createdById: fixture.creatorId,
+          snapshot,
+          validation: { blocking: [], warnings: [] },
+          contentHash,
+        },
+      });
+    }
+
+    await prisma.travelTemplate.update({
+      where: { id: template.id },
+      data: {
+        publishedVersionId: version.id,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+      },
     });
   }
 

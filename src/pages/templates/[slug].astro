@@ -1,0 +1,810 @@
+---
+import { ArrowLeft, ArrowRight, Clock, Download, MapPin, Share2, Wallet } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import PublicButton from '../../components/public/PublicButton.astro';
+import TemplateCard from '../../components/public/TemplateCard.astro';
+import MapView from '../../components/public/MapView.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { requestOrigin } from '../../lib/request-origin';
+import {
+  getPublishedTemplateBySlug,
+  listRelatedTemplates,
+  recordTemplateView,
+} from '../../lib/public-templates';
+
+export const prerender = false;
+
+const slug = Astro.params.slug ?? '';
+const template = await getPublishedTemplateBySlug(slug);
+
+if (!template) {
+  Astro.response.status = 404;
+}
+
+if (template) {
+  void recordTemplateView(template.id);
+}
+
+const related = template ? await listRelatedTemplates(template, 3) : [];
+const snapshot = template?.version.snapshot;
+const live = snapshot?.template;
+const origin = requestOrigin(Astro);
+const canonicalPath = template ? `/templates/${template.slug}` : undefined;
+const profilePath = template ? `/creators/${template.creator.username}` : undefined;
+const cover = live?.coverPhotoUrl ?? '/image/placeholder-destination.svg';
+const name = live?.title ?? template?.title ?? 'Travel template';
+
+const budget =
+  live && (live.budgetMinCents != null || live.budgetMaxCents != null)
+    ? `${live.budgetMinCents != null ? `$${Math.round(live.budgetMinCents / 100)}` : '—'}${
+        live.budgetMaxCents != null ? `–$${Math.round(live.budgetMaxCents / 100)}` : ''
+      } per person`
+    : null;
+
+const mapPoints =
+  snapshot?.days
+    .flatMap((day) => day.items)
+    .filter(
+      (item) =>
+        item.destinationSlug &&
+        item.destinationLatitude != null &&
+        item.destinationLongitude != null,
+    )
+    .map((item) => ({
+      name: item.destinationName ?? item.title,
+      slug: item.destinationSlug!,
+      province: item.destinationProvince ?? 'Cambodia',
+      latitude: item.destinationLatitude,
+      longitude: item.destinationLongitude,
+    })) ?? [];
+
+const uniqueMapPoints = Array.from(
+  new Map(mapPoints.map((point) => [point.slug, point])).values(),
+);
+
+const totalStops = snapshot?.days.reduce((total, day) => total + day.items.length, 0) ?? 0;
+
+const jsonLd =
+  template && live
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'TouristTrip',
+        name: live.title,
+        description: live.summary ?? undefined,
+        url: canonicalPath ? new URL(canonicalPath, origin).toString() : undefined,
+        image: new URL(cover, origin).toString(),
+        touristType: live.audience,
+        itinerary: {
+          '@type': 'ItemList',
+          numberOfItems: snapshot.days.length,
+          itemListElement: snapshot.days.map((day) => ({
+            '@type': 'ListItem',
+            position: day.dayNumber,
+            item: {
+              '@type': 'TouristAttraction',
+              name: day.title || `Day ${day.dayNumber}`,
+              description: day.items.map((item) => item.title).join(' · '),
+            },
+          })),
+        },
+        author: {
+          '@type': 'Person',
+          name: template.creator.displayName,
+          url: profilePath ? new URL(profilePath, origin).toString() : undefined,
+        },
+        provider: {
+          '@type': 'Organization',
+          name: 'Tosder Communities',
+          url: origin,
+        },
+      }
+    : undefined;
+---
+
+{template && live && snapshot ? (
+  <PublicLayout
+    title={`${name} — Tosder Communities`}
+    description={live.summary ?? `A ${live.durationDays}-day Cambodia itinerary by ${template.creator.displayName}.`}
+    canonical={canonicalPath}
+    image={cover}
+    imageAlt={`${name} travel template`}
+    type="article"
+    jsonLd={jsonLd}
+  >
+    <article class="template-page">
+      <div class="container">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span aria-hidden="true">/</span>
+          <a href="/templates">Templates</a>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{name}</span>
+        </nav>
+
+        <div class="template-layout">
+          <div class="template-main">
+            <header class="template-header">
+              <p class="label">
+                {live.province?.name ?? 'Cambodia'} · {live.durationDays} {live.durationDays === 1 ? 'day' : 'days'}
+              </p>
+              <h1>{name}</h1>
+              {live.summary && <p class="lede">{live.summary}</p>}
+              <div class="tag-row">
+                {live.style && <span class="tag">{live.style}</span>}
+                {live.season && <span class="tag tag--quiet">Best in {live.season}</span>}
+                {live.transport.map((mode) => <span class="tag tag--quiet">{mode}</span>)}
+                {live.audience.map((audience) => <span class="tag tag--quiet">{audience}</span>)}
+              </div>
+            </header>
+
+            <figure class="cover">
+              <img src={cover} alt={`${name} cover image`} width="1200" height="750" fetchpriority="high" decoding="async" />
+            </figure>
+
+            <div class="template-actions">
+              <a class="use-button" href={`/templates/${template.slug}/use`}>
+                <Download size={15} stroke-width={2} />
+                Use this template
+              </a>
+              <button class="share-button" type="button" data-share>
+                <Share2 size={15} stroke-width={1.75} />
+                Share
+              </button>
+              <span class="action-note">Copying creates your own trip. The template stays unchanged.</span>
+            </div>
+
+            <div class="facts">
+              <div>
+                <Clock size={15} stroke-width={1.75} />
+                <span>{live.durationDays} {live.durationDays === 1 ? 'day' : 'days'}</span>
+              </div>
+              {budget && (
+                <div>
+                  <Wallet size={15} stroke-width={1.75} />
+                  <span>{budget}</span>
+                </div>
+              )}
+              <div>
+                <MapPin size={15} stroke-width={1.75} />
+                <span>{totalStops} {totalStops === 1 ? 'stop' : 'stops'}</span>
+              </div>
+              <div>
+                <span>{template.viewCount.toLocaleString()} views</span>
+                <span>·</span>
+                <span>{template.saveCount.toLocaleString()} saves</span>
+                <span>·</span>
+                <span>{template.qualifiedUseCount.toLocaleString()} qualified uses</span>
+              </div>
+            </div>
+
+            {live.description && (
+              <section class="prose" aria-labelledby="about-heading">
+                <h2 id="about-heading">About this itinerary</h2>
+                <p>{live.description}</p>
+              </section>
+            )}
+
+            {uniqueMapPoints.length > 0 && (
+              <section class="map-section" aria-labelledby="map-heading">
+                <h2 id="map-heading">Route on the map</h2>
+                <MapView
+                  destinations={uniqueMapPoints}
+                  height="22rem"
+                  zoom={7}
+                  label="Stops in this itinerary"
+                />
+              </section>
+            )}
+
+            <section class="schedule" aria-labelledby="schedule-heading">
+              <h2 id="schedule-heading">Day by day</h2>
+              {snapshot.days.map((day) => (
+                <article class="day">
+                  <header class="day__header">
+                    <p class="day__number">Day {day.dayNumber}</p>
+                    <h3>{day.title || `Day ${day.dayNumber}`}</h3>
+                    {day.summary && <p>{day.summary}</p>}
+                  </header>
+                  <ol class="day__items">
+                    {day.items.map((item) => (
+                      <li>
+                        <div class="item__head">
+                          <span class="item__time">
+                            {item.startTime ?? 'Flexible'}{item.endTime ? `–${item.endTime}` : ''}
+                          </span>
+                          <span class="item__type">{item.type.toLowerCase()}</span>
+                          {item.estimatedCostCents != null && (
+                            <span class="item__cost">${Math.round(item.estimatedCostCents / 100)}</span>
+                          )}
+                        </div>
+                        <h4>{item.title}</h4>
+                        {item.destinationSlug && (
+                          <a class="item__place" href={`/destinations/${item.destinationSlug}`}>
+                            {item.destinationName}
+                          </a>
+                        )}
+                        {item.description && <p>{item.description}</p>}
+                        {item.practicalTips && <p class="item__tips">Tip: {item.practicalTips}</p>}
+                      </li>
+                    ))}
+                  </ol>
+                </article>
+              ))}
+            </section>
+
+            {live.logisticsNotes && (
+              <section class="prose" aria-labelledby="logistics-heading">
+                <h2 id="logistics-heading">Logistics</h2>
+                <p class="pre-line">{live.logisticsNotes}</p>
+              </section>
+            )}
+
+            <a class="back-link" href="/templates">
+              <ArrowLeft size={14} stroke-width={1.75} />
+              All templates
+            </a>
+          </div>
+
+          <aside class="template-side" aria-label="Template details and creator">
+            <div class="creator-card">
+              <a class="creator-avatar" href={profilePath}>
+                {template.creator.avatarUrl ? (
+                  <img src={template.creator.avatarUrl} alt="" width="48" height="48" loading="lazy" />
+                ) : (
+                  <span aria-hidden="true">{template.creator.displayName.slice(0, 2).toUpperCase()}</span>
+                )}
+                <span class="sr-only">View {template.creator.displayName} profile</span>
+              </a>
+              <div class="creator-copy">
+                <p>Created by</p>
+                <a href={profilePath}>{template.creator.displayName}</a>
+                <span>@{template.creator.username}</span>
+              </div>
+              <a class="creator-link" href={profilePath}>
+                View profile
+                <ArrowRight size={12} stroke-width={2} />
+              </a>
+            </div>
+
+            <div class="side-card">
+              <h2>At a glance</h2>
+              <dl>
+                <div>
+                  <dt>Duration</dt>
+                  <dd>{live.durationDays} days</dd>
+                </div>
+                <div>
+                  <dt>Budget</dt>
+                  <dd>{budget ?? 'Not recorded'}</dd>
+                </div>
+                <div>
+                  <dt>Season</dt>
+                  <dd>{live.season ?? 'Year-round'}</dd>
+                </div>
+                <div>
+                  <dt>Language</dt>
+                  <dd>{live.language === 'km' ? 'Khmer' : 'English'}</dd>
+                </div>
+                <div>
+                  <dt>Version</dt>
+                  <dd>v{template.version.versionNumber}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="side-card side-card--cta">
+              <h2>Make it yours</h2>
+              <p>Copy the itinerary into a private trip, then change the days, places, and pace.</p>
+              <a class="use-button use-button--full" href={`/templates/${template.slug}/use`}>
+                Use this template
+                <ArrowRight size={14} stroke-width={2} />
+              </a>
+            </div>
+          </aside>
+        </div>
+
+        {related.length > 0 && (
+          <section class="related" aria-labelledby="related-heading">
+            <div class="related__header">
+              <h2 id="related-heading">More itineraries</h2>
+              <a class="section-link" href="/templates">Browse all templates</a>
+            </div>
+            <div class="related-grid">
+              {related.map((item) => <TemplateCard template={item} />)}
+            </div>
+          </section>
+        )}
+      </div>
+    </article>
+  </PublicLayout>
+) : (
+  <PublicLayout title="Template not found — Tosder Communities" noindex>
+    <section class="not-found">
+      <div class="container">
+        <p class="label">Error 404</p>
+        <h1>Template not found.</h1>
+        <p>This template does not exist, is unpublished, or is no longer public.</p>
+        <div class="actions">
+          <PublicButton href="/templates">Browse templates</PublicButton>
+          <PublicButton href="/" variant="secondary">Home</PublicButton>
+        </div>
+      </div>
+    </section>
+  </PublicLayout>
+)}
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>('[data-share]');
+  button?.addEventListener('click', async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      await navigator.share({ title: document.title, url }).catch(() => undefined);
+      return;
+    }
+    await navigator.clipboard.writeText(url).catch(() => undefined);
+    button.textContent = 'Link copied';
+    window.setTimeout(() => {
+      button.textContent = 'Share';
+    }, 2000);
+  });
+</script>
+
+<style>
+  .template-page {
+    padding: clamp(var(--space-6), 6vw, 4rem) 0 clamp(var(--space-10), 8vw, 6rem);
+  }
+
+  .container {
+    width: min(100% - var(--space-8), 72rem);
+    margin: 0 auto;
+  }
+
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .breadcrumbs a:hover {
+    color: var(--color-text);
+  }
+
+  .breadcrumbs span[aria-current='page'] {
+    color: var(--color-text-muted);
+  }
+
+  .template-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 0.7fr);
+    gap: var(--space-8);
+    align-items: start;
+  }
+
+  .template-header {
+    max-width: 60rem;
+    margin-bottom: var(--space-5);
+  }
+
+  .label {
+    margin-bottom: var(--space-3);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  h1 {
+    margin-bottom: var(--space-3);
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.055em;
+    line-height: 1.04;
+  }
+
+  .lede {
+    max-width: 56ch;
+    color: var(--color-text-muted);
+    font-size: var(--text-lg);
+    line-height: var(--leading-relaxed);
+  }
+
+  .tag-row {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    padding: 2px var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-full);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .tag--quiet {
+    color: var(--color-text-subtle);
+  }
+
+  .cover {
+    margin: 0 0 var(--space-4);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background: var(--color-surface-sunken);
+  }
+
+  .cover img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+
+  .template-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .use-button,
+  .share-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: var(--control-height-md);
+    padding: 0 var(--space-4);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .use-button {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+  }
+
+  .use-button:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .share-button {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+  }
+
+  .share-button:hover {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  .action-note {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .facts {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-top: var(--border-width) solid var(--color-border);
+    border-bottom: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .facts div {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .prose {
+    margin-top: var(--space-6);
+  }
+
+  .prose h2,
+  .map-section h2,
+  .schedule > h2 {
+    margin-bottom: var(--space-3);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.025em;
+  }
+
+  .prose p {
+    max-width: 68ch;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .pre-line {
+    white-space: pre-line;
+  }
+
+  .map-section {
+    margin-top: var(--space-6);
+  }
+
+  .schedule {
+    margin-top: var(--space-7);
+  }
+
+  .day {
+    padding: var(--space-5) 0;
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .day__header {
+    margin-bottom: var(--space-3);
+  }
+
+  .day__number {
+    margin-bottom: var(--space-1);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .day__header h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .day__header p {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .day__items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .day__items li {
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-border);
+  }
+
+  .item__head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    flex-wrap: wrap;
+  }
+
+  .item__type {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .day__items h4 {
+    margin: var(--space-1) 0 var(--space-1);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .item__place {
+    display: inline-block;
+    margin-bottom: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .day__items p {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .item__tips {
+    color: var(--color-text-subtle) !important;
+    font-size: var(--text-xs) !important;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-7);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .back-link:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .template-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    position: sticky;
+    top: var(--space-6);
+  }
+
+  .creator-card,
+  .side-card {
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .creator-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .creator-avatar {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    overflow: hidden;
+  }
+
+  .creator-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .creator-copy p,
+  .creator-copy span {
+    display: block;
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+  }
+
+  .creator-copy a {
+    display: block;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .creator-link {
+    grid-column: 1 / -1;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .side-card h2 {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .side-card dl {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+  }
+
+  .side-card dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  .side-card dt {
+    color: var(--color-text-subtle);
+  }
+
+  .side-card dd {
+    margin: 0;
+    color: var(--color-text-muted);
+    text-align: right;
+  }
+
+  .side-card--cta p {
+    margin-bottom: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .use-button--full {
+    width: 100%;
+  }
+
+  .related {
+    margin-top: var(--space-8);
+    padding-top: var(--space-6);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .related__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .related__header h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .section-link {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .related-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .not-found {
+    padding: var(--space-10) 0;
+  }
+
+  .not-found h1 {
+    margin: var(--space-2) 0;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+  }
+
+  .not-found p {
+    margin-bottom: var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  @media (max-width: 1000px) {
+    .template-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .template-side {
+      position: static;
+    }
+  }
+</style>

@@ -1,114 +1,263 @@
 ---
-import { ArrowUpRight, Check, EyeOff, Flag, ShieldAlert, UserX } from '@lucide/astro';
+import { Check, CircleAlert, Eye, X } from '@lucide/astro';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import PageHeader from '../../components/admin/PageHeader.astro';
 import Panel from '../../components/admin/Panel.astro';
 import Badge from '../../components/ui/Badge.astro';
 import Button from '../../components/ui/Button.astro';
+import { ApiError } from '../../lib/api';
+import { getContentAdmin } from '../../lib/admin-auth';
+import { getCreatorTemplate } from '../../lib/templates';
+import { validateTemplate, type BuilderTemplate } from '../../lib/template-builder';
+import {
+  approveTemplate,
+  listPendingTemplates,
+  rejectTemplate,
+} from '../../lib/template-publishing';
 
-const reports = [
-  { id: 'RPT-1042', target: 'Kampot slow weekend', type: 'Template', reason: 'Misleading pricing', age: '18 min', priority: 'High', status: 'Open' },
-  { id: 'RPT-1041', target: 'Phnom Penh in 48 hours', type: 'Template', reason: 'Stale safety advice', age: '2 hours', priority: 'Medium', status: 'Open' },
-  { id: 'RPT-1039', target: 'Comment on Koh Rong dive', type: 'Comment', reason: 'Harassment', age: '5 hours', priority: 'High', status: 'Open' },
-  { id: 'RPT-1037', target: 'Battambang countryside loop', type: 'Template', reason: 'Unlicensed photo', age: '1 day', priority: 'Medium', status: 'In review' },
-  { id: 'RPT-1034', target: 'Malis Chhay', type: 'Account', reason: 'Spam profile links', age: '2 days', priority: 'Low', status: 'In review' },
-];
+export const prerender = false;
 
-const priorityVariant = (priority: string) =>
-  priority === 'High' ? 'danger' : priority === 'Medium' ? 'warning' : 'neutral';
+const { user, allowed } = await getContentAdmin(Astro);
+if (!user) {
+  return Astro.redirect(`/sign-in?redirectTo=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+let errorMessage: string | null = null;
+
+if (allowed && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = String(form.get('intent') ?? '');
+  const templateId = String(form.get('templateId') ?? '');
+
+  try {
+    if (intent === 'approve') {
+      const visibility = String(form.get('visibility') ?? 'public') === 'unlisted'
+        ? 'unlisted'
+        : 'public';
+      await approveTemplate(templateId, { id: user.id, email: user.email }, { visibility });
+      return Astro.redirect('/admin/moderation?notice=approved');
+    }
+
+    if (intent === 'reject') {
+      const reason = String(form.get('reason') ?? '');
+      await rejectTemplate(templateId, { id: user.id, email: user.email }, reason);
+      return Astro.redirect('/admin/moderation?notice=rejected');
+    }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'The action could not be completed.';
+    return Astro.redirect(`/admin/moderation?error=${encodeURIComponent(message)}`);
+  }
+}
+
+const pending = await listPendingTemplates();
+const selectedId = Astro.url.searchParams.get('template');
+const selected = pending.find((template) => template.id === selectedId) ?? pending[0] ?? null;
+
+const selectedTemplate = selected
+  ? await getCreatorTemplate(selected.id, selected.creatorId)
+  : null;
+
+const validation = selectedTemplate
+  ? validateTemplate(selectedTemplate as BuilderTemplate, {
+      emailVerified: true,
+      status: selectedTemplate.status,
+    })
+  : { blocking: [], warnings: [] };
+
+const notice = Astro.url.searchParams.get('notice');
+const error = Astro.url.searchParams.get('error');
+const notices: Record<string, string> = {
+  approved: 'Template approved and published.',
+  rejected: 'Changes requested. The creator can revise and resubmit.',
+};
 ---
 
 <AdminLayout title="Moderation">
   <PageHeader
-    title="Moderation"
-    description="Review reports, protect travelers, and keep decisions consistent and auditable."
+    title="Template review"
+    description="Check completeness and safety before a template reaches travelers. Every decision is written to the audit trail."
   >
-    <Button variant="secondary">
-      Moderation guide
-      <ArrowUpRight size={14} stroke-width={1.75} />
-    </Button>
+    <Badge variant={pending.length > 0 ? 'warning' : 'success'} dot>
+      {pending.length} awaiting review
+    </Badge>
   </PageHeader>
 
-  <div class="moderation-grid">
-    <Panel title="Open reports" description="5 open · 2 high priority">
-      <div class="queue" role="list" aria-label="Open reports">
-        {reports.map((report, index) => (
-          <a class:list={['queue-item', { 'is-active': index === 0 }]} href={`/admin/moderation?report=${report.id}`} role="listitem">
-            <span class="queue-main">
-              <span class="queue-title">
-                <strong>{report.target}</strong>
-                <Badge variant={priorityVariant(report.priority)} dot>{report.priority}</Badge>
+  {notice && notices[notice] && <p class="notice notice--success" role="status">{notices[notice]}</p>}
+  {error && <p class="notice notice--error" role="alert">{error}</p>}
+
+  {!allowed ? (
+    <p class="forbidden" role="alert">
+      Your account does not have content-admin access. Ask an administrator to add your email to the
+      content-admin allowlist.
+    </p>
+  ) : pending.length === 0 ? (
+    <div class="empty">
+      <Check size={22} stroke-width={1.75} />
+      <h2>No templates waiting.</h2>
+      <p>New submissions appear here as soon as creators request review.</p>
+    </div>
+  ) : (
+    <div class="moderation-grid">
+      <Panel title="Review queue" description={`${pending.length} pending`}>
+        <div class="queue" role="list" aria-label="Templates awaiting review">
+          {pending.map((template) => (
+            <a
+              class:list={['queue-item', { 'is-active': template.id === selected?.id }]}
+              href={`/admin/moderation?template=${template.id}`}
+              role="listitem"
+            >
+              <span class="queue-main">
+                <span class="queue-title">
+                  <strong>{template.title}</strong>
+                  <Badge variant="warning" dot>In review</Badge>
+                </span>
+                <span class="queue-meta">
+                  {template.creator.displayName} · @{template.creator.username} ·{' '}
+                  {template._count.days} {template._count.days === 1 ? 'day' : 'days'} ·{' '}
+                  {template.province?.name ?? 'No province'}
+                </span>
               </span>
-              <span class="queue-meta">{report.reason} · {report.type} · {report.age} ago</span>
-            </span>
-            <span class="queue-id">{report.id}</span>
-          </a>
-        ))}
-      </div>
-    </Panel>
-
-    <Panel title="Selected report" description="RPT-1042 · opened 18 minutes ago">
-      <div class="report">
-        <div class="report__header">
-          <div>
-            <h3>Kampot slow weekend</h3>
-            <p>Template by Dara Lim · Published 4 hours ago</p>
-          </div>
-          <Badge variant="danger" dot>High priority</Badge>
+              <span class="queue-id">
+                {template.updatedAt.toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+              </span>
+            </a>
+          ))}
         </div>
+      </Panel>
 
-        <dl class="report__facts">
-          <div>
-            <dt>Reason</dt>
-            <dd>Misleading pricing</dd>
+      {selected && selectedTemplate && (
+        <Panel
+          title={selected.title}
+          description={`Submitted by ${selected.creator.displayName} · @${selected.creator.username}`}
+        >
+          <div class="review">
+            <div class="review__meta">
+              <Badge variant="warning" dot>Pending review</Badge>
+              <span>{selectedTemplate.durationDays} days</span>
+              <span>{selectedTemplate.province?.name ?? 'No province'}</span>
+              <a href={`/admin/moderation/${selected.id}`}>
+                <Eye size={13} stroke-width={1.75} />
+                Open full preview
+              </a>
+            </div>
+
+            <p class="review__summary">{selectedTemplate.summary || 'No summary provided.'}</p>
+
+            <section class="review__checks" aria-labelledby="review-checks-heading">
+              <h3 id="review-checks-heading">Validation</h3>
+              {validation.blocking.length === 0 ? (
+                <p class="review__clear">
+                  <Check size={14} stroke-width={2} />
+                  No blocking issues.
+                </p>
+              ) : (
+                <ul class="review__list review__list--blocking">
+                  {validation.blocking.map((message) => <li>{message}</li>)}
+                </ul>
+              )}
+              {validation.warnings.length > 0 && (
+                <ul class="review__list review__list--warnings">
+                  {validation.warnings.map((message) => <li>{message}</li>)}
+                </ul>
+              )}
+            </section>
+
+            <form method="post" class="review__form">
+              <input type="hidden" name="intent" value="approve" />
+              <input type="hidden" name="templateId" value={selected.id} />
+              <label class="field">
+                <span>Visibility</span>
+                <select name="visibility">
+                  <option value="public">Public — list and index</option>
+                  <option value="unlisted">Unlisted — direct link only</option>
+                </select>
+              </label>
+              <Button type="submit" variant="primary" disabled={validation.blocking.length > 0}>
+                <Check size={15} stroke-width={1.75} />
+                Approve and publish
+              </Button>
+            </form>
+
+            <form method="post" class="review__reject">
+              <input type="hidden" name="intent" value="reject" />
+              <input type="hidden" name="templateId" value={selected.id} />
+              <label class="field">
+                <span>Reason for changes</span>
+                <textarea
+                  name="reason"
+                  rows="3"
+                  required
+                  minlength="3"
+                  maxlength="500"
+                  placeholder="Explain what the creator needs to fix before resubmitting."
+                ></textarea>
+              </label>
+              <Button type="submit" variant="danger">
+                <X size={15} stroke-width={1.75} />
+                Request changes
+              </Button>
+            </form>
+
+            <p class="review__note">
+              <CircleAlert size={13} stroke-width={1.75} />
+              Approving creates an immutable version. Rejecting returns the draft to the creator with
+              this reason.
+            </p>
           </div>
-          <div>
-            <dt>Reporter</dt>
-            <dd>Member · identity protected</dd>
-          </div>
-          <div>
-            <dt>Source</dt>
-            <dd>Template detail page</dd>
-          </div>
-        </dl>
-
-        <div class="report__quote">
-          <span class="report__quote-label">Reported content</span>
-          <p>“The guide says the boat transfer is included, but the operator charges $12 per person at the pier.”</p>
-        </div>
-
-        <div class="report__actions">
-          <Button variant="primary">
-            <EyeOff size={15} stroke-width={1.75} />
-            Hide content
-          </Button>
-          <Button variant="secondary">
-            <Flag size={15} stroke-width={1.75} />
-            Warn creator
-          </Button>
-          <Button variant="ghost">
-            <Check size={15} stroke-width={1.75} />
-            Dismiss
-          </Button>
-          <Button variant="danger" size="sm">
-            <UserX size={14} stroke-width={1.75} />
-            Suspend
-          </Button>
-        </div>
-
-        <p class="report__note">
-          <ShieldAlert size={13} stroke-width={1.75} aria-hidden="true" />
-          Every action is written to the audit log and notifies the creator.
-        </p>
-      </div>
-    </Panel>
-  </div>
+        </Panel>
+      )}
+    </div>
+  )}
 </AdminLayout>
 
 <style>
+  .notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .notice--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  }
+
+  .notice--error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  }
+
+  .forbidden,
+  .empty {
+    padding: var(--space-6);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    text-align: center;
+  }
+
+  .empty h2 {
+    color: var(--color-text);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
   .moderation-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
+    grid-template-columns: minmax(0, 1.05fr) minmax(20rem, 0.95fr);
     gap: var(--space-3);
     align-items: start;
   }
@@ -161,97 +310,132 @@ const priorityVariant = (priority: string) =>
     white-space: nowrap;
   }
 
-  .queue-meta {
+  .queue-meta,
+  .queue-id {
     color: var(--color-text-subtle);
     font-size: var(--text-xs);
   }
 
   .queue-id {
     flex: none;
-    color: var(--color-text-subtle);
     font-family: var(--font-mono);
-    font-size: var(--text-xs);
   }
 
-  .report {
+  .review {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
   }
 
-  .report__header {
+  .review__meta {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-
-  .report__header h3 {
-    font-size: var(--text-md);
-    font-weight: var(--weight-semibold);
-  }
-
-  .report__header p {
-    margin-top: 2px;
+    align-items: center;
+    gap: var(--space-2);
     color: var(--color-text-subtle);
     font-size: var(--text-xs);
+    flex-wrap: wrap;
   }
 
-  .report__facts {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-3);
-    margin: 0;
-    padding: var(--space-3) 0;
-    border-top: var(--border-width) solid var(--color-border);
-    border-bottom: var(--border-width) solid var(--color-border);
+  .review__meta a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
-  .report__facts dt {
-    color: var(--color-text-subtle);
-    font-size: var(--text-xs);
+  .review__summary {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
   }
 
-  .report__facts dd {
-    margin: 2px 0 0;
-    font-size: var(--text-xs);
-  }
-
-  .report__quote {
+  .review__checks {
     padding: var(--space-3);
     border: var(--border-width) solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-bg-subtle);
   }
 
-  .report__quote-label {
-    color: var(--color-text-subtle);
+  .review__checks h3 {
+    margin-bottom: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .review__clear {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-success-text);
     font-size: var(--text-xs);
   }
 
-  .report__quote p {
-    margin-top: var(--space-1);
-    color: var(--color-text-muted);
-    font-size: var(--text-sm);
-    line-height: var(--leading-relaxed);
-  }
-
-  .report__actions {
+  .review__list {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding-left: var(--space-4);
+    font-size: var(--text-xs);
   }
 
-  .report__note {
+  .review__list--blocking {
+    color: var(--color-danger-text);
+  }
+
+  .review__list--warnings {
+    margin-top: var(--space-2);
+    color: var(--color-warning-text);
+  }
+
+  .review__form,
+  .review__reject {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .field span {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+  }
+
+  .field select,
+  .field textarea {
+    width: 100%;
+    padding: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .review__note {
     display: flex;
     align-items: flex-start;
-    gap: var(--space-1);
+    gap: var(--space-2);
     color: var(--color-text-subtle);
     font-size: var(--text-xs);
-    line-height: var(--leading-relaxed);
+    line-height: var(--leading-normal);
   }
 
-  @media (max-width: 1200px) {
+  @media (max-width: 1000px) {
     .moderation-grid {
       grid-template-columns: minmax(0, 1fr);
     }

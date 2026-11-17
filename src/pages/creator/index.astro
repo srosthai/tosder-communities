@@ -12,6 +12,7 @@ import {
 } from '@lucide/astro';
 import PublicPage from '../../components/public/PublicPage.astro';
 import Badge from '../../components/ui/Badge.astro';
+import { isContentAdminEmail } from '../../lib/admin-auth';
 import { getSessionUser } from '../../lib/auth-user';
 import {
   archiveTemplate,
@@ -78,7 +79,10 @@ if (Astro.request.method === 'POST') {
     }
 
     if (intent === 'submit-review') {
-      await submitTemplateForReview(templateId, user.id, actor);
+      await submitTemplateForReview(templateId, user.id, actor, {
+        emailVerified: Boolean(user.emailVerified),
+        allowUnverified: isContentAdminEmail(user.email),
+      });
       return Astro.redirect('/creator?notice=submitted');
     }
   } catch (error) {

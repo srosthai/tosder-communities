@@ -22,9 +22,11 @@ import Select from '../../../components/ui/Select.astro';
 import Textarea from '../../../components/ui/Textarea.astro';
 import { getPrisma } from '../../../db/prisma';
 import { ApiError, json } from '../../../lib/api';
+import { isContentAdminEmail } from '../../../lib/admin-auth';
 import { getSessionUser } from '../../../lib/auth-user';
 import { ensureMemberProfile } from '../../../lib/profiles';
 import { getCreatorTemplate, submitTemplateForReview, templateStatusMeta } from '../../../lib/templates';
+import { publishTemplate } from '../../../lib/template-publishing';
 import {
   audienceOptions,
   builderSteps,
@@ -65,7 +67,7 @@ if (!user) {
   );
 }
 
-await ensureMemberProfile(user);
+const profile = await ensureMemberProfile(user);
 const id = z.uuid().safeParse(Astro.params.id);
 
 if (!id.success) {
@@ -197,6 +199,21 @@ if (template && Astro.request.method === 'POST') {
         if (isAutosave) return saveResponse();
         return Astro.redirect(`/creator/templates/${template.id}?step=plan&day=${value('dayId')}&saved=1`);
       }
+      case 'publish': {
+        await publishTemplate(
+          template.id,
+          user.id,
+          { id: user.id, email: user.email },
+          {
+            visibility: value('visibility') === 'unlisted' ? 'unlisted' : 'public',
+            guidelines: value('guidelines') === 'on',
+            emailVerified: Boolean(user.emailVerified),
+            allowUnverified: isContentAdminEmail(user.email),
+          },
+        );
+        if (isAutosave) return saveResponse();
+        return Astro.redirect(`/creator/templates/${template.id}?step=publish&published=1`);
+      }
       case 'submit-review': {
         if (value('guidelines') !== 'on') {
           throw new ApiError({
@@ -207,7 +224,7 @@ if (template && Astro.request.method === 'POST') {
         }
         const refreshed = (await getCreatorTemplate(template.id, user.id)) as BuilderTemplate;
         const validation = validateTemplate(refreshed, {
-          emailVerified: Boolean(user.emailVerified),
+          emailVerified: Boolean(user.emailVerified) || isContentAdminEmail(user.email),
           status: refreshed.status,
         });
         if (validation.blocking.length > 0) {
@@ -217,10 +234,15 @@ if (template && Astro.request.method === 'POST') {
             message: 'Fix the blocking issues before submitting for review.',
           });
         }
-        await submitTemplateForReview(template.id, user.id, {
-          id: user.id,
-          email: user.email,
-        });
+        await submitTemplateForReview(
+          template.id,
+          user.id,
+          { id: user.id, email: user.email },
+          {
+            emailVerified: Boolean(user.emailVerified),
+            allowUnverified: isContentAdminEmail(user.email),
+          },
+        );
         if (isAutosave) return saveResponse();
         return Astro.redirect(`/creator/templates/${template.id}?step=publish&submitted=1`);
       }
@@ -259,6 +281,8 @@ const completedCount = progress
   : 0;
 const saved = Astro.url.searchParams.get('saved') === '1';
 const submitted = Astro.url.searchParams.get('submitted') === '1';
+const published = Astro.url.searchParams.get('published') === '1';
+const canPublishDirectly = profile.trustedCreator;
 const activeDay = Astro.url.searchParams.get('day');
 const activeItem = Astro.url.searchParams.get('item');
 
@@ -280,7 +304,7 @@ const destinations = await getPrisma().destination.findMany({
 
 const validation = template
   ? validateTemplate(template, {
-      emailVerified: Boolean(user.emailVerified),
+      emailVerified: Boolean(user.emailVerified) || isContentAdminEmail(user.email),
       status: template.status,
     })
   : { blocking: [], warnings: [] };
@@ -380,6 +404,21 @@ const stepHref = (key: BuilderStep) =>
             Submitted for review. You can keep editing until a moderator responds.
           </p>
         )}
+        {published && (
+          <p class="notice notice--success" role="status">
+            Published{' '}
+            {template.status === 'PUBLISHED' ? (
+              <a href={`/templates/${template.slug}`}>View the public template</a>
+            ) : (
+              'as unlisted. It will not appear in public listings.'
+            )}
+          </p>
+        )}
+        {template.status === 'REJECTED' && template.rejectionReason && (
+          <p class="notice notice--error" role="alert">
+            Changes requested: {template.rejectionReason}
+          </p>
+        )}
         {errorMessage && <p class="notice notice--error" role="alert">{errorMessage}</p>}
 
         {step === 'basics' && (
@@ -398,8 +437,11 @@ const stepHref = (key: BuilderStep) =>
                   label="Slug"
                   name="slug"
                   value={template.slug}
-                  hint="Lowercase words separated by hyphens. Used in the public URL."
+                  hint={template.publishedVersionId
+                    ? 'Locked after the first publish so existing links keep working.'
+                    : 'Lowercase words separated by hyphens. Used in the public URL.'}
                   maxlength={90}
+                  disabled={Boolean(template.publishedVersionId)}
                 />
                 <Select label="Province" name="provinceId">
                   <option value="">Choose a province</option>
@@ -986,9 +1028,17 @@ const stepHref = (key: BuilderStep) =>
               </section>
             </div>
 
-            {template.status === 'DRAFT' || template.status === 'REJECTED' ? (
+            {(template.status === 'DRAFT' ||
+              template.status === 'REJECTED' ||
+              (canPublishDirectly && template.status === 'PENDING_REVIEW')) && (
               <form method="post" class="publish-form">
-                <input type="hidden" name="intent" value="submit-review" />
+                <input type="hidden" name="intent" value={canPublishDirectly ? 'publish' : 'submit-review'} />
+                {canPublishDirectly && (
+                  <Select label="Visibility" name="visibility">
+                    <option value="public">Public — list and index the template</option>
+                    <option value="unlisted">Unlisted — share by link only</option>
+                  </Select>
+                )}
                 <label class="guidelines">
                   <input type="checkbox" name="guidelines" value="on" required />
                   <span>
@@ -999,29 +1049,68 @@ const stepHref = (key: BuilderStep) =>
                 <div class="step__actions">
                   <a class="secondary-action" href={stepHref('preview')} data-step-link>Back to preview</a>
                   <button class="primary-action" type="submit" disabled={validation.blocking.length > 0}>
-                    Submit for review
+                    {canPublishDirectly ? 'Publish template' : 'Submit for review'}
                     <ArrowRight size={14} stroke-width={2} />
                   </button>
                 </div>
                 {validation.blocking.length > 0 && (
-                  <p class="publish-hint">Fix the blocking issues above to enable submission.</p>
+                  <p class="publish-hint">
+                    Fix the blocking issues above to enable {canPublishDirectly ? 'publishing' : 'submission'}.
+                  </p>
                 )}
               </form>
-            ) : (
+            )}
+
+            {template.status === 'PUBLISHED' || template.status === 'UNLISTED' ? (
               <div class="publish-state">
                 <Badge variant={statusMeta.variant} dot>{statusMeta.label}</Badge>
                 <p>{statusMeta.description}</p>
-                {template.status === 'PENDING_REVIEW' && (
-                  <p>Your submission is in the moderation queue. You can keep editing the draft.</p>
+                {template.status === 'PUBLISHED' ? (
+                  <p>
+                    <a href={`/templates/${template.slug}`}>Open the public template</a>
+                    {template.publishedVersion ? ` · version ${template.publishedVersion.versionNumber}` : ''}
+                  </p>
+                ) : (
+                  <p>This template is unlisted. It is not shown in public listings.</p>
                 )}
-                {template.status === 'PUBLISHED' && (
-                  <p>Publishing a revision is handled by the next moderation milestone.</p>
+                {template.updatedAt > (template.publishedVersion?.createdAt ?? template.updatedAt) && (
+                  <p>There are edits newer than the live version. Publish a revision when ready.</p>
                 )}
-                {template.status === 'ARCHIVED' && (
-                  <p>Restore this template from Creator Studio before submitting it again.</p>
+                {canPublishDirectly && (
+                  <form method="post" class="publish-form publish-form--compact">
+                    <input type="hidden" name="intent" value="publish" />
+                    <Select label="Visibility" name="visibility">
+                      <option value="public" selected={template.status === 'PUBLISHED'}>Public</option>
+                      <option value="unlisted" selected={template.status === 'UNLISTED'}>Unlisted</option>
+                    </Select>
+                    <label class="guidelines">
+                      <input type="checkbox" name="guidelines" value="on" required />
+                      <span>I confirm this revision follows the community guidelines.</span>
+                    </label>
+                    <div class="step__actions">
+                      <button class="primary-action" type="submit" disabled={validation.blocking.length > 0}>
+                        Publish revision
+                        <ArrowRight size={14} stroke-width={2} />
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {!canPublishDirectly && (
+                  <p>Revision publishing for reviewed creators is handled by moderation.</p>
                 )}
               </div>
-            )}
+            ) : template.status === 'PENDING_REVIEW' ? (
+              <div class="publish-state">
+                <Badge variant={statusMeta.variant} dot>{statusMeta.label}</Badge>
+                <p>{statusMeta.description}</p>
+                <p>Your submission is in the moderation queue. You can keep editing the draft.</p>
+              </div>
+            ) : template.status === 'ARCHIVED' ? (
+              <div class="publish-state">
+                <Badge variant={statusMeta.variant} dot>{statusMeta.label}</Badge>
+                <p>Restore this template from Creator Studio before submitting it again.</p>
+              </div>
+            ) : null}
           </section>
         )}
       </div>
@@ -2117,6 +2206,12 @@ const stepHref = (key: BuilderStep) =>
   .publish-hint {
     color: var(--color-text-subtle);
     font-size: var(--text-xs);
+  }
+
+  .publish-form--compact {
+    width: 100%;
+    margin-top: var(--space-2);
+    background: var(--color-bg-subtle);
   }
 
   .publish-state {

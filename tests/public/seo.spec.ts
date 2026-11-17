@@ -69,6 +69,8 @@ test.describe('seo', () => {
     expect(sitemap.status()).toBe(200);
     const xml = await sitemap.text();
     expect(xml).toContain('/destinations/angkor-wat');
+    expect(xml).toContain('/templates/kampot-slow-weekend');
+    expect(xml).toContain('/creators/dara-lim');
     expect(xml).toContain('/explore');
     expect(xml).not.toContain('/admin');
 

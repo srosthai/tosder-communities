@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { apiRoute, ApiError, json } from '../../../../../lib/api';
+import { isContentAdminEmail } from '../../../../../lib/admin-auth';
 import { getSessionUser } from '../../../../../lib/auth-user';
 import { ensureMemberProfile } from '../../../../../lib/profiles';
 import {
@@ -54,7 +55,10 @@ export const POST: APIRoute = apiRoute(async (context, requestId) => {
       template = await restoreTemplate(id.data, user.id, actor);
       break;
     case 'submit-review':
-      template = await submitTemplateForReview(id.data, user.id, actor);
+      template = await submitTemplateForReview(id.data, user.id, actor, {
+        emailVerified: Boolean(user.emailVerified),
+        allowUnverified: isContentAdminEmail(user.email),
+      });
       break;
   }
 

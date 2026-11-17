@@ -39,6 +39,33 @@ export const GET: APIRoute = async (context) => {
         priority: '0.7',
       });
     });
+
+    const templates = await getPrisma().travelTemplate.findMany({
+      where: { status: 'PUBLISHED', publishedVersionId: { not: null } },
+      orderBy: { publishedAt: 'desc' },
+      select: {
+        slug: true,
+        updatedAt: true,
+        creator: { select: { username: true } },
+      },
+    });
+
+    const creators = new Set<string>();
+    templates.forEach((template) => {
+      urls.push({
+        loc: new URL(`/templates/${template.slug}`, origin).toString(),
+        lastmod: template.updatedAt.toISOString(),
+        priority: '0.8',
+      });
+      creators.add(template.creator.username);
+    });
+
+    creators.forEach((username) => {
+      urls.push({
+        loc: new URL(`/creators/${username}`, origin).toString(),
+        priority: '0.6',
+      });
+    });
   } catch {
     // Keep the static sitemap available even if the content query fails.
   }
