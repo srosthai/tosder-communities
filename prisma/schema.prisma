@@ -12,6 +12,25 @@ enum ContentStatus {
   ARCHIVED
 }
 
+enum TemplateStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  UNLISTED
+  ARCHIVED
+}
+
+enum TemplateItemType {
+  ATTRACTION
+  FOOD
+  REST
+  TRANSPORT
+  SHOPPING
+  ACCOMMODATION
+  CUSTOM
+}
+
 // Temporary connectivity model. Remove once the status smoke test is replaced
 // by a real health check.
 model Todo {
@@ -36,6 +55,7 @@ model Province {
 
   districts      District[]
   destinations   Destination[]
+  templates      TravelTemplate[]
 
   @@index([status])
   @@index([name])
@@ -110,6 +130,7 @@ model Destination {
   categories  DestinationCategory[]
   tags        DestinationTag[]
   collections FeaturedCollectionItem[]
+  templateItems TemplateItem[]
 
   @@index([provinceId])
   @@index([districtId])
@@ -191,6 +212,130 @@ model AuditEvent {
   @@index([createdAt])
   @@index([actorEmail])
   @@map("audit_events")
+}
+
+model MemberProfile {
+  userId      String   @id @map("user_id")
+  username    String   @unique
+  displayName String   @map("display_name")
+  bio         String?
+  avatarUrl   String?  @map("avatar_url")
+  socialLinks Json?    @map("social_links")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  templates TravelTemplate[] @relation("TemplateCreator")
+
+  @@index([username])
+  @@map("member_profiles")
+}
+
+model TravelTemplate {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creatorId          String         @map("creator_id")
+  provinceId         String?        @map("province_id") @db.Uuid
+  title              String
+  slug               String         @unique
+  summary            String?
+  description        String?
+  coverPhotoUrl      String?        @map("cover_photo_url")
+  durationDays       Int            @default(1) @map("duration_days")
+  budgetMinCents     Int?           @map("budget_min_cents")
+  budgetMaxCents     Int?           @map("budget_max_cents")
+  currency           String         @default("USD")
+  season             String?
+  transport          String[]       @default([])
+  audience           String[]       @default([])
+  language           String         @default("en")
+  status             TemplateStatus @default(DRAFT)
+  publishedVersionId String?        @unique @map("published_version_id") @db.Uuid
+  publishedAt        DateTime?      @map("published_at") @db.Timestamptz(6)
+  reviewedById       String?        @map("reviewed_by_id")
+  reviewedAt         DateTime?      @map("reviewed_at") @db.Timestamptz(6)
+  rejectionReason    String?        @map("rejection_reason")
+  viewCount          Int            @default(0) @map("view_count")
+  likeCount          Int            @default(0) @map("like_count")
+  saveCount          Int            @default(0) @map("save_count")
+  qualifiedUseCount  Int            @default(0) @map("qualified_use_count")
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  creator          MemberProfile    @relation("TemplateCreator", fields: [creatorId], references: [userId], onDelete: Restrict)
+  province         Province?        @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  days             TemplateDay[]
+  versions         TemplateVersion[] @relation("TemplateVersions")
+  publishedVersion TemplateVersion?  @relation("PublishedVersion", fields: [publishedVersionId], references: [id], onDelete: SetNull)
+
+  @@index([creatorId])
+  @@index([provinceId])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([status, publishedAt])
+  @@index([title])
+  @@map("travel_templates")
+}
+
+model TemplateDay {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId  String   @map("template_id") @db.Uuid
+  dayNumber   Int      @map("day_number")
+  title       String?
+  summary     String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  template TravelTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  items    TemplateItem[]
+
+  @@unique([templateId, dayNumber])
+  @@index([templateId])
+  @@map("template_days")
+}
+
+model TemplateItem {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dayId              String           @map("day_id") @db.Uuid
+  destinationId      String?          @map("destination_id") @db.Uuid
+  title              String
+  type               TemplateItemType @default(ATTRACTION)
+  description        String?
+  practicalTips      String?          @map("practical_tips")
+  startTime          String?          @map("start_time")
+  endTime            String?          @map("end_time")
+  durationMinutes    Int?             @map("duration_minutes")
+  estimatedCostCents Int?             @map("estimated_cost_cents")
+  currency           String           @default("USD")
+  sortOrder          Int              @default(0) @map("sort_order")
+  photoUrl           String?          @map("photo_url")
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  day         TemplateDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  destination Destination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+
+  @@unique([dayId, sortOrder])
+  @@index([dayId])
+  @@index([destinationId])
+  @@map("template_items")
+}
+
+model TemplateVersion {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId    String   @map("template_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  createdById   String   @map("created_by_id")
+  snapshot      Json
+  validation    Json?
+  changeNote    String?  @map("change_note")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  template          TravelTemplate  @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  publishedTemplate TravelTemplate? @relation("PublishedVersion")
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId])
+  @@index([createdAt])
+  @@map("template_versions")
 }
 
 model FeaturedCollectionItem {

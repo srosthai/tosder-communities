@@ -86,13 +86,14 @@ npm run db:seed      # idempotent starter data
 npm run db:check     # counts, PostGIS locations, nearby query, photo alt text
 ```
 
-The seed covers seven provinces and ten destinations across temples, coast,
-nature, food, and culture. The placeholder landscape is local and carries an
-explicit editorial credit; real licensed photography replaces it before launch.
+The seed covers thirteen provinces and forty-three destinations across temples,
+coast, nature, food, and culture. The placeholder landscape is local and carries
+an explicit editorial credit; real licensed photography replaces it before
+launch. See `docs/dataset.md` for coverage and review status.
 
 ## Next steps
 
-- Admin CRUD for this domain (#16).
-- Public explore and destination pages (#18, #19).
-- Connect the public home to the featured collections (#17).
+- Admin CRUD for provinces, categories, tags, and collections (#16).
+- Object-storage photo uploads and responsive variants (#16).
 - Replace the placeholder seed assets with reviewed, licensed photography (#22).
+- See `docs/template-model.md` for the template and versioning domain (#24).

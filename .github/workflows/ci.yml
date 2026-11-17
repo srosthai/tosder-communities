@@ -64,6 +64,9 @@ jobs:
       - name: Verify destination content completeness
         run: npm run db:content-check
 
+      - name: Verify template schema constraints
+        run: npm run db:template-check
+
       - name: Type and Astro checks
         run: npm run check
 
