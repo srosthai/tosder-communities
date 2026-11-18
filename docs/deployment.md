@@ -34,6 +34,10 @@ NEON_AUTH_COOKIE_SECRET 32+ character cookie secret
 CONTENT_ADMIN_EMAILS    Bootstrap comma-separated admin emails
 ```
 
+Create or reset the `tosder_runtime` password in the Neon console. Put the
+pooled `tosder_runtime` URL in `DATABASE_URL`; keep the owner/direct URL for
+release migrations. Never commit either password.
+
 `DIRECT_URL` is used by release migration commands, not by the Vercel build. Use
 the owner/direct URL for migrations so the runtime role stays DML-only. If
 `DIRECT_URL` is omitted, the Prisma config falls back to `DATABASE_URL`; a direct
