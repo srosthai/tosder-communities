@@ -30,7 +30,9 @@ leakage, and dependency compromise.
 - **Secrets**: only `.env.example` placeholders are tracked. Authenticated test
   credentials live in `.env.local` through `E2E_TEST_*`.
 - **Dependency hygiene**: `@astrojs/vercel` is build-only and kept in
-  devDependencies; `npm audit --omit=dev` reports 0 vulnerabilities.
+  devDependencies. `npm audit --omit=dev` is reviewed; the only current
+  advisory is a transitive `picomatch` ReDoS in Astro build tooling with no
+  fixed release. See `docs/quality-exceptions.md`.
 - **Append-only audit**: audit rows cannot be updated by the application; every
   privileged mutation writes an entry.
 - **Payout safety**: no automatic money movement; payout references are unique
