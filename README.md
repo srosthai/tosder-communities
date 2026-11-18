@@ -81,6 +81,7 @@ The `todos` table is a smoke test, not part of the final domain model.
 - [Legal and compliance](./docs/legal.md)
 - [Email and verification](./docs/email.md)
 - [Object storage and photo uploads](./docs/storage.md)
+- [Backup, restore, and migration rollback](./docs/backup.md)
 - [Quality budgets](./docs/quality-budgets.md)
 - [Issues](https://github.com/srosthai/tosder-communities/issues)
 - [Milestones](https://github.com/srosthai/tosder-communities/milestones)

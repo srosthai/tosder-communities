@@ -286,6 +286,8 @@ model AuditEvent {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([entityType, createdAt])
   @@index([createdAt])
   @@index([actorEmail])
   @@map("audit_events")

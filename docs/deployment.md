@@ -40,14 +40,31 @@ Vercel.
 
 ### Database
 
-Run migrations against the Neon database before releasing the app. Builds do not migrate, so a database incident cannot block a deploy:
+Run migrations against the Neon database before releasing the app. Builds do not
+migrate, so a database incident cannot block a deploy.
+
+Local:
 
 ```bash
 npm run db:deploy
 npm run db:seed
 ```
 
-Seeding is idempotent and should be run once for a new environment.
+Production uses a separate connection string that is never added to Vercel:
+
+```bash
+PRODUCTION_DATABASE_URL="postgresql://..." \
+PRODUCTION_DIRECT_URL="postgresql://..." \
+npm run db:production:migrate
+
+PRODUCTION_DATABASE_URL="postgresql://..." \
+PRODUCTION_DIRECT_URL="postgresql://..." \
+npm run db:production:seed
+```
+
+The script prints only the target host and database, never credentials. Seeding
+is idempotent and should be run once for a new environment. See
+`docs/backup.md` for the snapshot and rollback procedure.
 
 ### Vercel build verification
 
