@@ -16,13 +16,25 @@ Roles live on `member_profiles.role`:
 assignment is complete; it is not used in the browser. Role changes are made at
 `/admin/users`, require a reason, and write an audit entry.
 
-### Row-level security
+### Database roles and row-level security
+
+| Role | Use |
+| --- | --- |
+| `neondb_owner` | Migrations, DDL, and break-glass administration. Never use for normal requests. |
+| `tosder_runtime` | Application DML only. Login role with `SELECT`, `INSERT`, `UPDATE`, `DELETE`; no `CREATE` on schema. Bypasses RLS because the current app does not set a per-request `app.user_id`. |
+| `tosder_app` | Non-login policy role used by RLS tests and a future session-scoped runtime. |
+
+Set the production `DATABASE_URL` to `tosder_runtime` and keep the owner/direct
+URL for `npm run db:production:migrate`. If the runtime role password is rotated,
+update Vercel's `DATABASE_URL` in the same change.
 
 Postgres RLS policies cover trips, trip days/items, checklists, saves, likes,
 reviews, and notifications. They use `current_setting('app.user_id', true)` and
-the non-login `tosder_app` role. The app owner bypasses RLS, so application
-checks remain the primary enforcement; RLS is defense-in-depth for any future
-non-owner connection. `npm run db:rls-check` verifies cross-user reads and writes.
+the non-login `tosder_app` role. `tosder_runtime` deliberately bypasses RLS until
+the app sets the user context on every connection; application ownership checks
+remain the primary enforcement. `npm run db:rls-check` verifies cross-user reads
+and writes, and `npm run db:runtime-role-check` verifies the runtime role has DML
+but no DDL.
 
 ## Competition lifecycle
 

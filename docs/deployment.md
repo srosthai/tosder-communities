@@ -28,13 +28,16 @@ route for the request; it is not an Astro 404. The adapter output fixes that.
 Set these in Vercel for Production and Preview:
 
 ```text
-DATABASE_URL            Neon pooled connection string
+DATABASE_URL            Neon pooled runtime URL using tosder_runtime
 NEON_AUTH_BASE_URL      Neon Auth base URL
 NEON_AUTH_COOKIE_SECRET 32+ character cookie secret
 CONTENT_ADMIN_EMAILS    Bootstrap comma-separated admin emails
 ```
 
-`DIRECT_URL` is used by release migration commands, not by the Vercel build. If it is omitted, the Prisma config falls back to `DATABASE_URL`; a direct URL is preferred for migrations.
+`DIRECT_URL` is used by release migration commands, not by the Vercel build. Use
+the owner/direct URL for migrations so the runtime role stays DML-only. If
+`DIRECT_URL` is omitted, the Prisma config falls back to `DATABASE_URL`; a direct
+owner URL is preferred for migrations.
 `E2E_TEST_*` variables are for local authenticated tests and must not be added to
 Vercel.
 
@@ -65,6 +68,18 @@ npm run db:production:seed
 The script prints only the target host and database, never credentials. Seeding
 is idempotent and should be run once for a new environment. See
 `docs/backup.md` for the snapshot and rollback procedure.
+
+
+### Neon branches
+
+- The Neon `main` branch holds production data. Do not reset it.
+- Create a Neon branch for risky migrations, preview environments, or restore
+  drills. Point the preview deployment at the branch connection string.
+- Local development may use `main` for read-only work; write-heavy tests should
+  use a branch or the isolated CI Postgres service.
+- Production runtime uses `tosder_runtime`; migrations use the owner/direct URL.
+
+A branch is cheap and isolated. Prefer it over a second project.
 
 ### Vercel build verification
 

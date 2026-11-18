@@ -76,6 +76,9 @@ jobs:
       - name: Verify row-level security policies
         run: npm run db:rls-check
 
+      - name: Verify the runtime database role
+        run: npm run db:runtime-role-check
+
       - name: Type and Astro checks
         run: npm run check
 
