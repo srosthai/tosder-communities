@@ -97,3 +97,37 @@ port 4321 by default.
 Never commit `.env.local`, connection strings, auth secrets, or test passwords.
 Authenticated Playwright tests read `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` from
 `.env.local`; the repository only contains placeholders.
+
+### Recovering a detached Vercel domain
+
+A Vercel-branded `404 DEPLOYMENT_NOT_FOUND` means the hostname is not assigned to
+a deployment; it is not an Astro 404. In the Vercel project:
+
+1. Open **Settings → Domains**.
+2. Add `tosder-communities.vercel.app` if it is missing and assign it to the
+   production deployment. If Vercel says the domain is already in use, remove it
+   from the old project/team first.
+3. Open **Settings → Deployment Protection**. For a public site, do not protect
+   production with Vercel Authentication. Preview protection is fine.
+4. Open **Settings → Environment Variables** and confirm `DATABASE_URL`,
+   `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, and
+   `CONTENT_ADMIN_EMAILS` exist for Production.
+5. Redeploy the latest `main` commit.
+6. Apply migrations to the production connection string if health reports
+   `schema: partial`:
+
+   ```bash
+   PRODUCTION_DATABASE_URL="postgresql://..." \
+   PRODUCTION_DIRECT_URL="postgresql://..." \
+   npm run db:production:migrate
+   ```
+
+7. Verify:
+
+   ```bash
+   npm run prod:check
+   ```
+
+   `/api/health` must report `checks.schema: "ready"`. If it reports `partial`,
+   the production `DATABASE_URL` points at a different database than the one
+   that received migrations.
