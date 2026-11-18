@@ -30,6 +30,15 @@ test.describe('public shell', () => {
     await expect(page.getByText('Coast and islands', { exact: true }).first()).toBeVisible();
   });
 
+  test('reports real schema and catalog status', async ({ page }) => {
+    const response = await page.goto('/status');
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole('heading', { name: 'System status' })).toBeVisible();
+    await expect(page.getByText('Neon Postgres reachable')).toBeVisible();
+    await expect(page.getByText('Published catalog')).toBeVisible();
+    await expect(page.getByText('Todos table')).toHaveCount(0);
+  });
+
   test('puts the skip link first in the tab order', async ({ page }) => {
     await page.goto('/');
     await page.keyboard.press('Tab');
