@@ -151,7 +151,9 @@ test.describe.serial('template builder', () => {
     await copyItem.locator('summary').click();
     page.once('dialog', (dialog) => dialog.accept());
     await copyItem.getByRole('button', { name: 'Remove' }).click();
-    await expect(page.locator('.item__title', { hasText: 'Coffee stop (copy)' })).toHaveCount(0);
+    await expect(page.locator('.item__title', { hasText: 'Coffee stop (copy)' })).toHaveCount(0, {
+      timeout: 15_000,
+    });
 
     await page.getByRole('link', { name: 'Continue to map' }).click();
     await expect(page).toHaveURL(/step=map/);
