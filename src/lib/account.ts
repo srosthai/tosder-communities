@@ -7,7 +7,7 @@ function deletedUsername(userId: string): string {
   return `deleted-${hash}`;
 }
 
-export async function exportAccountData(userId: string) {
+export async function exportAccountData(userId: string, email?: string | null) {
   const prisma = getPrisma();
   const profile = await prisma.memberProfile.findUnique({
     where: { userId },
@@ -144,6 +144,7 @@ export async function exportAccountData(userId: string) {
     exportedAt: new Date().toISOString(),
     account: {
       userId,
+      email: email ?? null,
       ...profile,
     },
   };
