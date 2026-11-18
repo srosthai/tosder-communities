@@ -49,6 +49,7 @@ Never set `E2E_TEST_*` in Vercel. `DIRECT_URL` is only for migration commands.
 - [ ] Competition draft → active → closed → finalized works
 - [ ] Reward approval and manual payout recording work
 - [ ] Audit log filters and CSV export work
+- [ ] Member can download a JSON account export and delete their account from `/account`
 - [ ] Health endpoint returns 200 and reports database status
 
 ### Quality and security
@@ -119,9 +120,17 @@ Then manually:
 
 ### Data deletion request
 
-1. Verify the account owner.
-2. Delete private trips, saves, likes, reviews, and notifications.
-3. Preserve audit and payout records required for legal or financial obligations.
+Members can self-serve from `/account`: download the JSON export, then type
+`DELETE` under **Privacy and account data**. The app anonymizes the profile,
+archives authored templates, deletes private trips/saves/likes/reviews/
+notifications, and signs the member out.
+
+For an assisted request:
+
+1. Verify the account owner before making changes.
+2. Confirm the member has used the self-service flow where possible.
+3. Preserve usage, reward, and audit records required for competition, legal,
+   or financial obligations without retaining the member's name or contact data.
 4. Record the request and scope without storing extra personal data.
 
 ## Content launch sign-off

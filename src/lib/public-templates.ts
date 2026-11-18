@@ -88,7 +88,7 @@ export async function getPublishedTemplateBySlug(
       slug,
       status: 'PUBLISHED',
       publishedVersionId: { not: null },
-      creator: { suspendedAt: null },
+      creator: { suspendedAt: null, deletedAt: null },
     },
     include: {
       creator: { select: { username: true, displayName: true, avatarUrl: true } },
@@ -135,7 +135,7 @@ export async function listPublishedTemplates(params: PublishedTemplateListParams
   const where = {
     status: 'PUBLISHED' as const,
     publishedVersionId: { not: null },
-    creator: { suspendedAt: null },
+    creator: { suspendedAt: null, deletedAt: null },
     ...(q
       ? {
           OR: [
@@ -186,7 +186,7 @@ export async function listRelatedTemplates(
     where: {
       status: 'PUBLISHED',
       publishedVersionId: { not: null },
-      creator: { suspendedAt: null },
+      creator: { suspendedAt: null, deletedAt: null },
       id: { not: template.id },
       OR: [
         ...(template.province ? [{ province: { slug: template.province.slug } }] : []),
@@ -217,7 +217,7 @@ export async function listRelatedTemplates(
 
 export async function getPublicCreatorProfile(username: string) {
   const profile = await getPrisma().memberProfile.findFirst({
-    where: { username, suspendedAt: null },
+    where: { username, suspendedAt: null, deletedAt: null },
     select: {
       userId: true,
       username: true,

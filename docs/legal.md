@@ -21,6 +21,9 @@ Public pages:
 - [x] Moderation decisions and appeals described
 - [x] No automatic money movement
 - [x] Public pages avoid traveler identity exposure
+- [x] Self-service JSON export is available at `/api/account/export`
+- [x] Self-service account deletion is available on `/account` with typed confirmation
+- [x] Deleted profiles are anonymized; templates are archived; private trips/saves/likes/reviews/notifications are removed
 - [ ] Legal counsel review and final entity/contact details
 - [ ] Cambodia-specific tax and payout advice for rewards
 - [ ] Final privacy contact and data-request process assigned
