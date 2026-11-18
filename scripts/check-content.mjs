@@ -11,6 +11,7 @@ const prisma = new PrismaClient({
 const MIN_PROVINCES = 8;
 const MIN_DESTINATIONS = 40;
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const cambodiaBounds = { minLat: 9.5, maxLat: 15.0, minLon: 102.0, maxLon: 108.0 };
 
 const provinces = await prisma.province.findMany({
   where: { status: 'PUBLISHED' },
@@ -54,6 +55,15 @@ for (const destination of destinations) {
   if (!destination.practicalTips?.trim()) problems.push(`${label}: practical tips are missing.`);
   if (destination.latitude == null || destination.longitude == null) {
     problems.push(`${label}: coordinates are missing.`);
+  } else if (
+    destination.latitude < cambodiaBounds.minLat ||
+    destination.latitude > cambodiaBounds.maxLat ||
+    destination.longitude < cambodiaBounds.minLon ||
+    destination.longitude > cambodiaBounds.maxLon
+  ) {
+    problems.push(
+      `${label}: coordinates (${destination.latitude}, ${destination.longitude}) fall outside Cambodia.`,
+    );
   }
   if (destination.photos.length === 0) {
     problems.push(`${label}: at least one photo is required.`);
@@ -73,6 +83,16 @@ if (problems.length > 0) {
   console.log('Content checks passed');
 }
 
+const placeholderPhotos = destinations.reduce(
+  (total, destination) =>
+    total + destination.photos.filter((photo) => photo.url.includes('placeholder')).length,
+  0,
+);
+const byProvince = destinations.reduce((counts, destination) => {
+  counts[destination.province.name] = (counts[destination.province.name] ?? 0) + 1;
+  return counts;
+}, {});
+
 console.log({
   provinces: provinces.length,
   destinations: destinations.length,
@@ -80,6 +100,14 @@ console.log({
     (destination) => destination.latitude != null && destination.longitude != null,
   ).length,
   photos: destinations.reduce((total, destination) => total + destination.photos.length, 0),
+  placeholderPhotos,
+  byProvince,
 });
+
+if (placeholderPhotos > 0) {
+  console.warn(
+    `${placeholderPhotos} photo placeholders remain. Replace them with licensed photography before public launch.`,
+  );
+}
 
 await prisma.$disconnect();
