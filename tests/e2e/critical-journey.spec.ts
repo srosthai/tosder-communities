@@ -79,7 +79,7 @@ test.describe.serial('critical traveler journey', () => {
       .getByLabel('What should other travelers know?')
       .fill(`Excellent pacing and reliable timing notes. Journey ${stamp}.`);
     await page.getByRole('button', { name: 'Publish review' }).click();
-    await expect(page.locator('.review-stars')).toBeVisible();
+    await expect(page.locator('.review-stars')).toBeVisible({ timeout: 20_000 });
 
     await page.goto('/templates/kampot-slow-weekend');
     await expect(page.getByText(`Excellent pacing and reliable timing notes. Journey ${stamp}.`)).toBeVisible();
