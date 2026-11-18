@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { apiRoute, json } from '../../lib/api';
 import { checkDatabase, getPrisma } from '../../db/prisma';
-import { DATABASE_URL } from 'astro:env/server';
+import { DATABASE_URL, NEON_AUTH_BASE_URL } from 'astro:env/server';
 
 export const GET: APIRoute = apiRoute(async (_context, requestId) => {
   const startedAt = performance.now();
@@ -53,6 +53,14 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
     }
   })();
 
+  const authConfigured = Boolean(NEON_AUTH_BASE_URL);
+  const storageConfigured = Boolean(
+    process.env.S3_ENDPOINT &&
+      process.env.S3_BUCKET &&
+      process.env.S3_ACCESS_KEY_ID &&
+      process.env.S3_SECRET_ACCESS_KEY,
+  );
+
   const healthy = databaseCheck.reachable === true && schemaState === 'ready';
 
   return json(
@@ -64,6 +72,8 @@ export const GET: APIRoute = apiRoute(async (_context, requestId) => {
         target,
         schema: schemaState,
         features: schema,
+        auth: { configured: authConfigured },
+        storage: { configured: storageConfigured },
       },
       latencyMs: Math.round(performance.now() - startedAt),
       release: process.env.RELEASE ?? process.env.NODE_ENV ?? 'development',
