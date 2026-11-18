@@ -182,7 +182,7 @@ export async function listReports(filters: {
     userIds.length
       ? getPrisma().memberProfile.findMany({
           where: { userId: { in: userIds } },
-          select: { userId: true, username: true, displayName: true, suspendedAt: true },
+          select: { userId: true, username: true, displayName: true, suspendedAt: true, deletedAt: true },
         })
       : [],
   ]);
@@ -217,7 +217,7 @@ export async function listReports(filters: {
         targetLabel = user?.displayName ?? targetLabel;
         targetHref = user ? `/creators/${user.username}` : null;
         targetOwnerId = user?.userId ?? null;
-        targetStatus = user?.suspendedAt ? 'SUSPENDED' : 'ACTIVE';
+        targetStatus = user?.deletedAt ? 'DELETED' : user?.suspendedAt ? 'SUSPENDED' : 'ACTIVE';
       }
 
       return { ...report, targetLabel, targetHref, targetOwnerId, targetStatus, targetText };

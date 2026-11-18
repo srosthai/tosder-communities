@@ -4,24 +4,21 @@ import AuthCard from '../components/public/AuthCard.astro';
 import Input from '../components/ui/Input.astro';
 import Button from '../components/ui/Button.astro';
 import { getAuthForRequest, safeRedirect } from '../lib/auth-server';
+import { getSessionUser } from '../lib/auth-user';
 
 export const prerender = false;
 
-let errorMessage: string | null = null;
+let errorMessage: string | null =
+  Astro.url.searchParams.get('deleted') === '1'
+    ? 'This account has been deleted. Create a new account to continue.'
+    : null;
 let email = '';
 const redirectTo = safeRedirect(
   Astro.url.searchParams.get('redirectTo') ?? '/account',
 );
 
 const auth = getAuthForRequest(Astro);
-let existingUser = null;
-
-try {
-  const existing = await auth.getSession();
-  existingUser = existing.data?.user ?? null;
-} catch {
-  existingUser = null;
-}
+const existingUser = await getSessionUser(Astro);
 
 if (existingUser && Astro.request.method !== 'POST') {
   return Astro.redirect(redirectTo);

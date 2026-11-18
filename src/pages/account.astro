@@ -4,18 +4,33 @@ import PublicPage from '../components/public/PublicPage.astro';
 import PublicButton from '../components/public/PublicButton.astro';
 import Badge from '../components/ui/Badge.astro';
 import { getAuthForRequest } from '../lib/auth-server';
+import { getSessionUser } from '../lib/auth-user';
 import { getMemberNotifications } from '../lib/reports';
+import { deleteAccount } from '../lib/account';
 
 export const prerender = false;
 
 const auth = getAuthForRequest(Astro);
-const { data } = await auth.getSession();
+const user = await getSessionUser(Astro);
 
-if (!data?.user) {
+if (!user) {
   return Astro.redirect('/sign-in?redirectTo=/account');
 }
+let accountError: string | null = null;
 
-const user = data.user;
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (String(form.get('intent') ?? '') === 'delete-account') {
+    if (String(form.get('confirmation') ?? '') !== 'DELETE') {
+      accountError = 'Type DELETE exactly to confirm account deletion.';
+    } else {
+      await deleteAccount(user.id);
+      await auth.signOut();
+      return Astro.redirect('/sign-in?deleted=1');
+    }
+  }
+}
+
 const notifications = await getMemberNotifications(user.id);
 ---
 
@@ -76,6 +91,34 @@ const notifications = await getMemberNotifications(user.id);
       <ShieldCheck size={13} stroke-width={1.75} />
       Public templates never expose private trip data.
     </p>
+
+    <section class="privacy" aria-labelledby="privacy-heading">
+      <h2 id="privacy-heading">Privacy and account data</h2>
+      <p>
+        Download a copy of your profile, trips, saves, reviews, templates, usage
+        records, and rewards. The export is JSON.
+      </p>
+      <a class="export-link" href="/api/account/export">Download my data</a>
+
+      <details class="delete-account">
+        <summary>Delete my account</summary>
+        <p>
+          This anonymizes your profile, archives your templates, deletes private
+          trips, saves, likes, reviews, and notifications, and signs you out.
+          Usage and payout records may be retained for competition and financial
+          integrity, without your name or contact details.
+        </p>
+        {accountError && <p class="privacy-error" role="alert">{accountError}</p>}
+        <form method="post" class="delete-form">
+          <input type="hidden" name="intent" value="delete-account" />
+          <label>
+            Type DELETE to confirm
+            <input name="confirmation" required autocomplete="off" />
+          </label>
+          <button type="submit">Delete account</button>
+        </form>
+      </details>
+    </section>
 
     {notifications.length > 0 && (
       <section class="notifications" aria-labelledby="notifications-heading">
@@ -203,6 +246,87 @@ const notifications = await getMemberNotifications(user.id);
   .signout-button:hover {
     text-decoration: underline;
     text-underline-offset: 2px;
+  }
+
+  .privacy {
+    margin: 0 var(--space-5) var(--space-5);
+    padding: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-sunken);
+  }
+
+  .privacy h2 {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .privacy p {
+    margin-top: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+  }
+
+  .export-link {
+    display: inline-flex;
+    margin-top: var(--space-2);
+    color: var(--color-text);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .delete-account {
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .delete-account summary {
+    color: var(--color-danger-text);
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+
+  .privacy-error {
+    color: var(--color-danger-text) !important;
+  }
+
+  .delete-form {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .delete-form label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .delete-form input {
+    height: var(--control-height-sm);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
+  }
+
+  .delete-form button {
+    height: var(--control-height-sm);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-danger-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    font-size: var(--text-sm);
   }
 
   .notifications {

@@ -1,5 +1,6 @@
 import type { APIContext } from 'astro';
 import { getAuthForRequest } from './auth-server';
+import { getPrisma } from '../db/prisma';
 
 export interface SessionUser {
   id: string;
@@ -15,7 +16,18 @@ export async function getSessionUser(
   try {
     const auth = getAuthForRequest(context);
     const { data } = await auth.getSession();
-    return (data?.user as SessionUser | undefined) ?? null;
+    const user = (data?.user as SessionUser | undefined) ?? null;
+    if (!user) return null;
+
+    // Deleted accounts keep an anonymized profile for financial/audit
+    // integrity, but must behave as signed out for every application surface.
+    const profile = await getPrisma().memberProfile.findUnique({
+      where: { userId: user.id },
+      select: { deletedAt: true },
+    });
+    if (profile?.deletedAt) return null;
+
+    return user;
   } catch {
     return null;
   }

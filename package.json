@@ -22,7 +22,7 @@
     "lighthouse": "lhci autorun",
     "db:seed": "node prisma/seed.mjs",
     "db:check": "node scripts/check-geography.mjs",
-    "test:auth": "AUTH_E2E=true playwright test tests/auth tests/admin/content-editor.spec.ts tests/creator tests/trips tests/saves tests/reviews tests/engagement tests/e2e tests/admin/operations.spec.ts tests/admin/taxonomy.spec.ts --workers=1",
+    "test:auth": "AUTH_E2E=true playwright test tests/auth tests/account tests/admin/content-editor.spec.ts tests/creator tests/trips tests/saves tests/reviews tests/engagement tests/e2e tests/admin/operations.spec.ts tests/admin/taxonomy.spec.ts --workers=1",
     "db:deploy": "prisma migrate deploy",
     "db:content-check": "node scripts/check-content.mjs",
     "db:template-check": "node scripts/check-template-schema.mjs",
