@@ -57,7 +57,7 @@ Never set `E2E_TEST_*` in Vercel. `DIRECT_URL` is only for migration commands.
 - [ ] `npm run check` — 0 errors/warnings
 - [ ] `npx playwright test` and `npm run test:auth` pass
 - [ ] Lighthouse budgets pass on five URLs
-- [ ] `npm audit --omit=dev` reports 0 vulnerabilities
+- [ ] `npm audit --omit=dev` reviewed; no unexplained advisories (the transitive `picomatch` advisory is documented in `docs/quality-exceptions.md`)
 - [ ] Security headers and cross-site mutation block verified
 - [ ] No secrets in tracked files
 - [ ] Legal pages and competition rules reviewed by counsel
