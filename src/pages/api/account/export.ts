@@ -18,7 +18,7 @@ export const GET: APIRoute = apiRoute(
     }
 
     await ensureMemberProfile(user);
-    const data = await exportAccountData(user.id);
+    const data = await exportAccountData(user.id, user.email);
     if (!data) {
       throw new ApiError({
         status: 404,
