@@ -11,7 +11,9 @@ module.exports = {
         'http://127.0.0.1:4322/design?theme=light',
         'http://127.0.0.1:4322/admin',
       ],
-      numberOfRuns: 1,
+      // Three runs and the median keep CI assertions stable when a shared
+      // runner has a slow first paint or font swap.
+      numberOfRuns: 3,
       settings: {
         chromeFlags: '--headless=new --no-sandbox',
       },
