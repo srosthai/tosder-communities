@@ -55,6 +55,9 @@ jobs:
       - name: Apply database migrations
         run: npm run db:deploy
 
+      - name: Check migration and schema drift
+        run: npm run db:drift-check
+
       - name: Seed geography fixtures
         run: npm run db:seed
 

@@ -29,7 +29,11 @@
     "db:trip-check": "node scripts/check-trip-schema.mjs",
     "db:usage-recompute": "node scripts/recompute-usage.mjs",
     "db:rls-check": "node scripts/check-rls.mjs",
-    "vercel-build": "prisma generate && astro check && astro build"
+    "vercel-build": "prisma generate && astro check && astro build",
+    "db:production:migrate": "node scripts/production-db.mjs migrate",
+    "db:production:seed": "node scripts/production-db.mjs seed",
+    "db:verify": "npm run db:content-check && npm run db:template-check && npm run db:trip-check && npm run db:rls-check",
+    "db:drift-check": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.13",
