@@ -17,7 +17,11 @@ leakage, and dependency compromise.
 - **Ownership scoping**: trips, saves, likes, reviews, and notifications are
   queried by the authenticated user id. Cross-owner access returns 404.
 - **RLS defense-in-depth**: Postgres policies cover user-owned tables for the
-  `tosder_app` role. `npm run db:rls-check` verifies cross-user reads and writes.
+  `tosder_app` role. `tosder_runtime` is the DML-only application role; it
+  bypasses RLS because the current app does not set a per-request user context,
+  so server ownership checks remain primary. `npm run db:rls-check` verifies
+  cross-user reads and writes, and `npm run db:runtime-role-check` verifies the
+  runtime role cannot create schema objects.
 - **CSRF**: mutating requests with a cross-site `Origin` or
   `Sec-Fetch-Site: cross-site` are rejected in middleware.
 - **Headers**: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`,
