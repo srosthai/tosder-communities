@@ -38,6 +38,12 @@ The generated password and the superadmin note are written to
 that file to the team password manager and change the seeder password after the
 first sign-in.
 
+These accounts were created against the Neon Auth branch and the current
+`DATABASE_URL`. If the production Vercel project still points at a different
+database, apply the migrations and run `SUPERADMIN_EMAIL=... npm run provision:superadmin`
+with the production `DATABASE_URL` exported. The auth user
+already exists, so only the profile/role needs to be created there.
+
 ## Google sign-in
 
 Neon Auth has the shared Google provider enabled. The sign-in and sign-up pages
