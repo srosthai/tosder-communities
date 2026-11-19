@@ -107,6 +107,6 @@ test.describe.serial('admin content editor', () => {
   test('requires a content-admin session', async ({ page }) => {
     await page.goto('/admin/content/new');
     await expect(page).toHaveURL(/\/sign-in\?redirectTo=%2Fadmin%2Fcontent%2Fnew$/);
-    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   });
 });

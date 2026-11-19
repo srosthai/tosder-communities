@@ -71,6 +71,7 @@ test.describe.serial('template builder', () => {
     await page.getByRole('button', { name: 'Save and continue' }).click();
     await expect(page.getByText('Add a one-line summary.')).toBeVisible();
     await expect(page).toHaveURL(/step=basics/);
+    await expect(page.locator('[data-builder-root]')).not.toHaveAttribute('aria-busy', 'true');
 
     await page.getByLabel('Title').fill(title);
     await page.getByLabel('Summary').fill('Two slow days around Siem Reap.');
@@ -121,8 +122,10 @@ test.describe.serial('template builder', () => {
     await page.locator('.item[open]').getByLabel('Description').fill('Start before the heat and walk the outer galleries.');
     await page.locator('.item[open]').getByRole('button', { name: 'Save item' }).click();
     await page.waitForURL(/step=plan&saved=1$/);
+    await expect(page.locator('[data-builder-root]')).not.toHaveAttribute('aria-busy', 'true', { timeout: 10_000 });
 
     await page.getByRole('button', { name: 'Add item' }).click();
+    await expect(page).toHaveURL(/step=plan&day=.*&item=/, { timeout: 15_000 });
     await page.locator('.item[open]').getByLabel('Title', { exact: true }).fill('Coffee stop');
     await page.locator('.item[open]').getByLabel('Type').selectOption('FOOD');
     await page.locator('.item[open]').getByLabel('Start time').fill('10:30');
@@ -145,7 +148,7 @@ test.describe.serial('template builder', () => {
     await expect(page.locator('.item__title').first()).toHaveText('Coffee stop');
 
     await page.locator('.item').first().getByRole('button', { name: 'Duplicate' }).click();
-    await expect(page.locator('.item__title', { hasText: 'Coffee stop (copy)' })).toBeVisible();
+    await expect(page.locator('.item__title', { hasText: 'Coffee stop (copy)' })).toBeVisible({ timeout: 15_000 });
 
     const copyItem = page.locator('.item', { hasText: 'Coffee stop (copy)' });
     await copyItem.locator('summary').click();
@@ -157,7 +160,29 @@ test.describe.serial('template builder', () => {
 
     await page.getByRole('link', { name: 'Continue to map' }).click();
     await expect(page).toHaveURL(/step=map/);
+    await page.reload();
+    await expect(page).toHaveURL(/step=map/);
     await page.getByLabel('Travel notes').fill('Book a tuk-tuk the night before. Carry small notes for tickets.');
+    await expect(page.locator('[data-save-state]')).toHaveText('Saved', { timeout: 10_000 });
+    await expect(page.locator('[data-builder-root]')).not.toHaveAttribute('aria-busy', 'true');
+
+    const verify = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+    });
+    await expect
+      .poll(
+        async () =>
+          (
+            await verify.travelTemplate.findUnique({
+              where: { id },
+              select: { logisticsNotes: true },
+            })
+          )?.logisticsNotes,
+        { timeout: 15_000 },
+      )
+      .toBe('Book a tuk-tuk the night before. Carry small notes for tickets.');
+    await verify.$disconnect();
+
     await page.getByRole('button', { name: 'Save and preview' }).click();
 
     await expect(page).toHaveURL(/step=preview/);

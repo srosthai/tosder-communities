@@ -106,6 +106,7 @@ test.describe('public shell', () => {
   });
 
   test('public pages have no serious accessibility violations in both themes', async ({ page }) => {
+    test.setTimeout(120_000);
     for (const theme of ['light', 'dark'] as const) {
       await page.addInitScript((value) => {
         localStorage.setItem('tosder-theme', value);

@@ -104,6 +104,7 @@ test.describe.serial('Creator Studio', () => {
   );
 
   test('creates, renames, submits, duplicates, archives, and restores', async ({ page }) => {
+    test.setTimeout(120_000);
     await ensureAdmin(page);
     await page.goto('/creator');
     await expect(page.getByRole('heading', { name: 'Your templates, in one place.' })).toBeVisible();

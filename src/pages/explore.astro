@@ -145,13 +145,19 @@ const activeFilters = Boolean(q || province || category || sort !== 'recommended
 </PublicPage>
 
 <script>
-  const form = document.querySelector<HTMLFormElement>('[data-explore-filters]');
-  if (form) {
+  const initExploreFilters = () => {
+    const form = document.querySelector<HTMLFormElement>('[data-explore-filters]');
+    if (!form) return;
+    if (form.dataset.ready === 'true') return;
+
     form.querySelectorAll('select').forEach((select) => {
       select.addEventListener('change', () => form.requestSubmit());
     });
     form.dataset.ready = 'true';
-  }
+  };
+
+  initExploreFilters();
+  document.addEventListener('astro:page-load', initExploreFilters);
 </script>
 
 <style>

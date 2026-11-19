@@ -21,12 +21,15 @@ Both values are server-only. They are declared with `astro:env/server` in
 `astro.config.mjs`, so they are read at runtime and are not bundled into client
 code. The auth base URL is public to browsers, but the cookie secret is not.
 
-Trusted domains for local development:
+Trusted domains:
 
 - `http://localhost:4321`
 - `http://127.0.0.1:4321`
+- `http://localhost:4323`
+- `http://127.0.0.1:4323`
+- `https://tosder-communities.vercel.app` (production)
 
-Register the production and preview origins before launch.
+Register any additional preview origin before using OAuth there.
 
 ## Server adapter
 
@@ -45,8 +48,8 @@ secret.
 
 | Route | Purpose |
 | --- | --- |
-| `/sign-up` | Create an email/password account. One account is traveler and creator. |
-| `/sign-in` | Sign in with email/password. Supports a safe internal `redirectTo`. |
+| `/sign-up` | Create an email/password account or continue with Google. One account is traveler and creator. |
+| `/sign-in` | Sign in with email/password or Google. Supports a safe internal `redirectTo`. |
 | `/account` | Protected profile page; redirects signed-out visitors to sign-in. |
 | `/forgot-password` | Request a reset link. Always returns a generic response. |
 | `/reset-password` | Set a new password from the reset token. |
@@ -55,6 +58,24 @@ secret.
 
 The public header reads the session when a cookie is present and shows the
 member's account instead of sign-in actions.
+
+## Google sign-in
+
+The Neon Auth shared Google provider is enabled. Both auth pages post
+`intent=google` to the same route; the server calls `startSocialSignIn` in
+`src/lib/auth-server.ts`, which resolves the Neon Auth social URL and redirects
+the browser. The callback returns to the safe internal `redirectTo` target
+(default `/account`).
+
+The CSP `form-action` must include the Neon Auth origin and
+`https://accounts.google.com`; `src/middleware.ts` derives the auth origin from
+`NEON_AUTH_BASE_URL`.
+
+## Production accounts
+
+See `docs/accounts.md` for the superadmin and seeder provisioning scripts. The
+superadmin uses Google sign-in; the seeder uses email/password and its generated
+credentials are stored only in `.secrets/`, which is gitignored.
 
 ## Email verification
 

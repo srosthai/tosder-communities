@@ -87,7 +87,7 @@ const exportUrl = `/api/admin/audit/export?${new URLSearchParams({
     title="Audit log"
     description="Append-only events for privileged mutations. Entries cannot be edited through the application."
   >
-    <a class="export-link" href={exportUrl}>Export CSV</a>
+    <a class="export-link" href={exportUrl} download>Export CSV</a>
   </PageHeader>
 
   {!allowed ? (

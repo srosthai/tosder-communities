@@ -35,7 +35,9 @@
     "db:verify": "npm run db:content-check && npm run db:template-check && npm run db:trip-check && npm run db:rls-check && npm run db:runtime-role-check",
     "db:drift-check": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code",
     "prod:check": "node scripts/check-production.mjs",
-    "db:runtime-role-check": "node scripts/check-runtime-role.mjs"
+    "db:runtime-role-check": "node scripts/check-runtime-role.mjs",
+    "provision:seed": "node scripts/provision-seed-user.mjs",
+    "provision:superadmin": "node scripts/promote-superadmin.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.13",
