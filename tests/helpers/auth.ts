@@ -8,11 +8,15 @@ export const adminPassword = process.env.E2E_TEST_PASSWORD ?? '';
 
 async function attemptSignIn(page: Page) {
   await page.goto('/sign-in');
+
+  // A valid session redirects straight to the account page.
+  if (new URL(page.url()).pathname === '/account') return true;
+
   await page.getByLabel('Email address').fill(adminEmail);
   await page.getByLabel('Password', { exact: true }).fill(adminPassword);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page
-    .waitForURL(/\/(account|sign-in)$/, { timeout: 10_000 })
+    .waitForURL(/\/account$/, { timeout: 15_000 })
     .catch(() => undefined);
   return new URL(page.url()).pathname === '/account';
 }

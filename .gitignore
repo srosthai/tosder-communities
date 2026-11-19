@@ -12,6 +12,7 @@ dist/
 .netlify/
 
 # Environment and secrets
+.secrets/
 .env
 .env.*
 !.env.example

@@ -58,7 +58,7 @@ test.describe.serial('member authentication', () => {
   test('redirects signed-out visitors away from the account page', async ({ page }) => {
     await page.goto('/account');
     await expect(page).toHaveURL(/\/sign-in\?redirectTo=\/account$/);
-    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   });
 
   test('renders the recovery pages', async ({ page }) => {

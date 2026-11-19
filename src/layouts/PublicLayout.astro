@@ -199,84 +199,114 @@ const navItems = [
   </footer>
 
   <script>
-    const root = document.documentElement;
-    const themeToggle = document.querySelector<HTMLButtonElement>('[data-public-theme-toggle]');
-    const mobileToggle = document.querySelector<HTMLButtonElement>('[data-mobile-toggle]');
-    const mobileMenu = document.querySelector<HTMLElement>('[data-mobile-menu]');
-    const mobileBackdrop = document.querySelector<HTMLElement>('[data-mobile-backdrop]');
-    const mobileClose = document.querySelector<HTMLButtonElement>('[data-mobile-close]');
+    (() => {
+      const shellWindow = window as Window & { __tosderPublicShellBound?: boolean };
+      if (shellWindow.__tosderPublicShellBound) return;
+      shellWindow.__tosderPublicShellBound = true;
 
-    const updateThemeLabel = () => {
-      const dark = root.classList.contains('dark');
-      const label = dark ? 'Switch to light theme' : 'Switch to dark theme';
-      themeToggle?.setAttribute('aria-label', label);
-      themeToggle?.setAttribute('title', label);
-      themeToggle?.setAttribute('aria-pressed', String(dark));
-    };
+      const themeToggle = () =>
+        document.querySelector<HTMLButtonElement>('[data-public-theme-toggle]');
+      const mobileToggle = () =>
+        document.querySelector<HTMLButtonElement>('[data-mobile-toggle]');
+      const mobileMenu = () => document.querySelector<HTMLElement>('[data-mobile-menu]');
+      const mobileBackdrop = () =>
+        document.querySelector<HTMLElement>('[data-mobile-backdrop]');
 
-    themeToggle?.addEventListener('click', () => {
-      const dark = !root.classList.contains('dark');
-      root.classList.toggle('dark', dark);
-      root.dataset.theme = dark ? 'dark' : 'light';
-      localStorage.setItem('tosder-theme', dark ? 'dark' : 'light');
+      const updateThemeLabel = () => {
+        const dark = document.documentElement.classList.contains('dark');
+        const label = dark ? 'Switch to light theme' : 'Switch to dark theme';
+        const button = themeToggle();
+        button?.setAttribute('aria-label', label);
+        button?.setAttribute('title', label);
+        button?.setAttribute('aria-pressed', String(dark));
+      };
+
+      const toggleTheme = () => {
+        const root = document.documentElement;
+        const dark = !root.classList.contains('dark');
+        root.classList.toggle('dark', dark);
+        root.dataset.theme = dark ? 'dark' : 'light';
+        localStorage.setItem('tosder-theme', dark ? 'dark' : 'light');
+        updateThemeLabel();
+      };
+
+      const setMobileMenu = (open: boolean, restoreFocus = true) => {
+        const menu = mobileMenu();
+        const toggle = mobileToggle();
+        const backdrop = mobileBackdrop();
+        if (!menu || !toggle || !backdrop) return;
+
+        menu.classList.toggle('is-open', open);
+        backdrop.classList.toggle('is-open', open);
+        menu.setAttribute('aria-hidden', String(!open));
+        toggle.setAttribute('aria-expanded', String(open));
+        document.body.style.overflow = open ? 'hidden' : '';
+
+        if (open) {
+          const initialFocus =
+            menu.querySelector<HTMLElement>('.mobile-nav a') ??
+            menu.querySelector<HTMLElement>('a, button');
+          requestAnimationFrame(() => initialFocus?.focus());
+        } else if (restoreFocus) {
+          toggle.focus();
+        }
+      };
+
+      document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        if (target.closest('[data-public-theme-toggle]')) {
+          toggleTheme();
+          return;
+        }
+        if (target.closest('[data-mobile-toggle]')) {
+          setMobileMenu(!mobileMenu()?.classList.contains('is-open'));
+          return;
+        }
+        if (target.closest('[data-mobile-close]') || target.closest('[data-mobile-backdrop]')) {
+          setMobileMenu(false);
+          return;
+        }
+        if (target.closest('[data-mobile-menu] a')) {
+          setMobileMenu(false);
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        const menu = mobileMenu();
+        if (!menu?.classList.contains('is-open')) return;
+
+        if (event.key === 'Escape') {
+          setMobileMenu(false);
+          return;
+        }
+        if (event.key !== 'Tab') return;
+
+        const focusable = Array.from(
+          menu.querySelectorAll<HTMLElement>('a, button'),
+        ).filter((element) => !element.hasAttribute('disabled'));
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
+
+      document.addEventListener('astro:page-load', () => {
+        updateThemeLabel();
+        setMobileMenu(false, false);
+      });
+
       updateThemeLabel();
-    });
-
-    updateThemeLabel();
-
-    const setMobileMenu = (open: boolean) => {
-      if (!mobileMenu || !mobileToggle || !mobileBackdrop) return;
-      mobileMenu.classList.toggle('is-open', open);
-      mobileBackdrop.classList.toggle('is-open', open);
-      mobileMenu.setAttribute('aria-hidden', String(!open));
-      mobileToggle.setAttribute('aria-expanded', String(open));
-      document.body.style.overflow = open ? 'hidden' : '';
-
-      if (open) {
-        const initialFocus =
-          mobileMenu.querySelector<HTMLElement>('.mobile-nav a') ??
-          mobileMenu.querySelector<HTMLElement>('a, button');
-        requestAnimationFrame(() => initialFocus?.focus());
-      } else {
-        mobileToggle.focus();
-      }
-    };
-
-    mobileToggle?.addEventListener('click', () => {
-      setMobileMenu(!mobileMenu?.classList.contains('is-open'));
-    });
-    mobileClose?.addEventListener('click', () => setMobileMenu(false));
-    mobileBackdrop?.addEventListener('click', () => setMobileMenu(false));
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && mobileMenu?.classList.contains('is-open')) {
-        setMobileMenu(false);
-      }
-    });
-
-    mobileMenu?.addEventListener('keydown', (event) => {
-      if (event.key !== 'Tab') return;
-
-      const focusable = Array.from(
-        mobileMenu.querySelectorAll<HTMLElement>('a, button'),
-      ).filter((element) => !element.hasAttribute('disabled'));
-      if (focusable.length === 0) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    });
-
-    mobileMenu?.querySelectorAll('a').forEach((link) => {
-      link.addEventListener('click', () => setMobileMenu(false));
-    });
+    })();
   </script>
 
   <style>

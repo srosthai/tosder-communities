@@ -54,3 +54,23 @@ export function safeRedirect(value: FormDataEntryValue | string | null, fallback
   if (!target.startsWith('/') || target.startsWith('//')) return fallback;
   return target;
 }
+
+export async function startSocialSignIn(
+  context: APIContext,
+  provider: 'google',
+  callbackURL: string,
+) {
+  const auth = getAuthForRequest(context);
+  const result = await auth.signIn.social({
+    provider,
+    callbackURL,
+    errorCallbackURL: `${new URL(context.request.url).origin}/sign-in?error=google`,
+  });
+
+  if (result.error) {
+    return { error: result.error.message ?? 'Google sign-in could not be started.' };
+  }
+
+  const url = result.data?.url;
+  return url ? { url } : { error: 'Google sign-in could not be started.' };
+}

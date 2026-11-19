@@ -1,4 +1,5 @@
 import { defineMiddleware } from 'astro:middleware';
+import { NEON_AUTH_BASE_URL } from 'astro:env/server';
 import { captureException, log, newRequestId } from './lib/logger';
 
 const mutating = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -13,7 +14,19 @@ function applySecurityHeaders(response: Response, requestUrl: URL) {
   set('referrer-policy', 'strict-origin-when-cross-origin');
   set('x-frame-options', 'DENY');
   set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
-  set('content-security-policy', "frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+
+  const formAction = ["'self'", 'https://accounts.google.com'];
+  if (NEON_AUTH_BASE_URL) {
+    try {
+      formAction.push(new URL(NEON_AUTH_BASE_URL).origin);
+    } catch {
+      /* Ignore a malformed auth URL; the CSP still blocks unknown origins. */
+    }
+  }
+  set(
+    'content-security-policy',
+    `frame-ancestors 'none'; base-uri 'self'; form-action ${formAction.join(' ')}`,
+  );
   if (requestUrl.protocol === 'https:') {
     set('strict-transport-security', 'max-age=31536000; includeSubDomains');
   }

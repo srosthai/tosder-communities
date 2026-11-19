@@ -1,0 +1,338 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import BrandLogo from '../BrandLogo.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  eyebrow?: string;
+  error?: string | null;
+  alternateText: string;
+  alternateHref: string;
+  alternateLink: string;
+}
+
+const {
+  title,
+  description,
+  eyebrow = 'Tosder Communities',
+  error = null,
+  alternateText,
+  alternateHref,
+  alternateLink,
+} = Astro.props;
+---
+
+<BaseLayout
+  title={`${title} — Tosder Communities`}
+  description={description}
+  noindex
+  bodyClass="auth-body"
+>
+  <main class="auth-page">
+    <section class="auth-shell">
+      <aside class="auth-story">
+        <a class="auth-brand" href="/">
+          <BrandLogo size={30} alt="" />
+          <span>Tosder <span>Communities</span></span>
+        </a>
+
+        <div class="story-copy">
+          <p class="story-eyebrow">Cambodia, planned by people who have been there</p>
+          <h1>Go slow.<br />Come back with a story.</h1>
+          <p>
+            Build a trip from real itineraries, keep the places that fit, and leave the rest.
+            No generic listicles, no packed schedules.
+          </p>
+        </div>
+
+        <ul class="story-list">
+          <li>Copy a route and make it yours</li>
+          <li>Keep every place, note, and day in one plan</li>
+          <li>Share what worked with the next traveler</li>
+        </ul>
+
+        <div class="story-foot">
+          <span class="story-pill">43 places · 13 provinces</span>
+          <span class="story-note">Local notes. Honest timing. Room to wander.</span>
+        </div>
+      </aside>
+
+      <section class="auth-panel">
+        <div class="auth-panel__inner">
+          <a class="auth-mobile-brand" href="/">
+            <BrandLogo size={26} alt="" />
+            <span>Tosder Communities</span>
+          </a>
+
+          <header class="auth-head">
+            <p class="auth-eyebrow">{eyebrow}</p>
+            <h2>{title}</h2>
+            <p>{description}</p>
+          </header>
+
+          {error && <p class="auth-error" role="alert">{error}</p>}
+          <slot />
+
+          <p class="auth-switch">
+            {alternateText}
+            <a href={alternateHref}>{alternateLink}</a>
+          </p>
+        </div>
+      </section>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  .auth-page {
+    min-height: 100vh;
+    padding: clamp(var(--space-2), 2vw, var(--space-4));
+    background:
+      radial-gradient(circle at 12% 18%, oklch(0.86 0.06 160 / 0.35), transparent 30%),
+      radial-gradient(circle at 88% 82%, oklch(0.86 0.08 70 / 0.18), transparent 28%),
+      var(--color-bg);
+  }
+
+  .auth-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    width: min(100%, 72rem);
+    min-height: calc(100vh - clamp(var(--space-4), 4vw, var(--space-8)));
+    margin: 0 auto;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: clamp(1rem, 2vw, 1.75rem);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+
+  .auth-story {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    padding: clamp(var(--space-5), 5vw, var(--space-9));
+    background:
+      radial-gradient(circle at 22% 18%, oklch(0.72 0.12 160 / 0.2), transparent 34%),
+      radial-gradient(circle at 85% 82%, oklch(0.76 0.13 70 / 0.12), transparent 30%),
+      linear-gradient(150deg, oklch(0.24 0.02 170), oklch(0.16 0.012 260));
+    color: oklch(0.97 0.01 160);
+    overflow: hidden;
+  }
+
+  .auth-story::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(oklch(1 0 0 / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(1 0 0 / 0.04) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(to bottom, black, transparent 85%);
+    pointer-events: none;
+  }
+
+  .auth-story > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .auth-brand,
+  .auth-mobile-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: inherit;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.02em;
+  }
+
+  .auth-brand span span {
+    color: oklch(0.97 0.01 160 / 0.58);
+    font-weight: var(--weight-regular);
+  }
+
+  .story-copy {
+    margin-top: auto;
+  }
+
+  .story-eyebrow {
+    margin-bottom: var(--space-3);
+    color: oklch(0.97 0.01 160 / 0.58);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .story-copy h1 {
+    font-size: clamp(2.6rem, 5.8vw, 4.7rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.06em;
+    line-height: 0.94;
+    text-wrap: balance;
+  }
+
+  .story-copy > p:last-child {
+    max-width: 34ch;
+    margin-top: var(--space-4);
+    color: oklch(0.97 0.01 160 / 0.68);
+    font-size: var(--text-md);
+    line-height: var(--leading-relaxed);
+  }
+
+  .story-list {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .story-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: oklch(0.97 0.01 160 / 0.78);
+    font-size: var(--text-sm);
+  }
+
+  .story-list li::before {
+    content: '';
+    width: 0.4rem;
+    height: 0.4rem;
+    flex: none;
+    border-radius: var(--radius-full);
+    background: oklch(0.78 0.13 160);
+    box-shadow: 0 0 0 3px oklch(0.78 0.13 160 / 0.12);
+  }
+
+  .story-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid oklch(1 0 0 / 0.1);
+  }
+
+  .story-pill {
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid oklch(1 0 0 / 0.14);
+    border-radius: var(--radius-full);
+    background: oklch(1 0 0 / 0.06);
+    color: oklch(0.97 0.01 160 / 0.82);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .story-note {
+    color: oklch(0.97 0.01 160 / 0.48);
+    font-size: var(--text-xs);
+  }
+
+  .auth-panel {
+    display: grid;
+    place-items: center;
+    padding: clamp(var(--space-5), 5vw, var(--space-9));
+    background: var(--color-surface);
+  }
+
+  .auth-panel__inner {
+    width: min(100%, 25rem);
+  }
+
+  .auth-mobile-brand {
+    display: none;
+    margin-bottom: var(--space-6);
+    color: var(--color-text);
+  }
+
+  .auth-head {
+    margin-bottom: var(--space-5);
+  }
+
+  .auth-eyebrow {
+    margin-bottom: var(--space-2);
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .auth-head h2 {
+    font-size: clamp(1.75rem, 3vw, 2.2rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.045em;
+    line-height: 1.05;
+  }
+
+  .auth-head > p:last-child {
+    margin-top: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  .auth-error {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-danger);
+    border-radius: var(--radius-md);
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+  }
+
+  .auth-switch {
+    margin-top: var(--space-5);
+    padding-top: var(--space-5);
+    border-top: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+
+  .auth-switch a {
+    margin-left: var(--space-1);
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  @media (max-width: 900px) {
+    .auth-page {
+      padding: var(--space-2);
+    }
+
+    .auth-shell {
+      grid-template-columns: 1fr;
+      min-height: calc(100vh - var(--space-4));
+    }
+
+    .auth-story {
+      display: none;
+    }
+
+    .auth-panel {
+      padding: var(--space-6) var(--space-5);
+      align-items: start;
+    }
+
+    .auth-mobile-brand {
+      display: inline-flex;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .auth-panel {
+      padding: var(--space-5) var(--space-4);
+    }
+  }
+</style>

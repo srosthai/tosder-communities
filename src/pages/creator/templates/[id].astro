@@ -1224,7 +1224,14 @@ const stepHref = (key: BuilderStep) =>
     return dirty.size === 0;
   };
 
+  const waitForPending = async () => {
+    for (let attempt = 0; attempt < 100 && (busy || pending > 0); attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+  };
+
   const softNavigate = async (url: string, init?: RequestInit, push = true) => {
+    await waitForPending();
     if (busy) return;
     if (!(await flushAll())) {
       throw new Error('Some changes could not be saved.');

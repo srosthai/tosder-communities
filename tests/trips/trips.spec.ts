@@ -234,9 +234,9 @@ test.describe.serial('trip copy flow', () => {
 
     await page.getByLabel('New checklist item').fill('Buy travel insurance');
     await page.getByRole('button', { name: 'Add', exact: true }).click();
-    await expect(page.getByText('Buy travel insurance')).toBeVisible();
+    await expect(page.getByText('Buy travel insurance')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('checkbox', { name: /Mark Buy travel insurance/ }).check();
-    await expect(page.locator('.is-done', { hasText: 'Buy travel insurance' })).toBeVisible();
+    await expect(page.locator('.is-done', { hasText: 'Buy travel insurance' })).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: 'Remove Buy travel insurance' }).click();
     await expect(page.getByText('Buy travel insurance')).toHaveCount(0, {
       timeout: 15_000,

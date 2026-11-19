@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { ClientRouter } from 'astro:transitions';
 import { requestOrigin } from '../lib/request-origin';
 
 interface Props {
@@ -47,6 +48,7 @@ const jsonLdString = jsonLd ? JSON.stringify(jsonLd) : null;
   class:list={[{ dark: theme === 'dark' }]}
 >
   <head>
+    <ClientRouter />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link
@@ -104,5 +106,19 @@ const jsonLdString = jsonLd ? JSON.stringify(jsonLd) : null;
   </head>
   <body class={bodyClass}>
     <slot />
+    <script is:inline>
+      (() => {
+        const markForms = () => {
+          document.querySelectorAll('form:not([data-astro-reload])').forEach((form) => {
+            form.setAttribute('data-astro-reload', '');
+          });
+        };
+        markForms();
+        new MutationObserver(markForms).observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+        });
+      })();
+    </script>
   </body>
 </html>

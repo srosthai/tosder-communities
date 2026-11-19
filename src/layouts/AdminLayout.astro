@@ -326,6 +326,19 @@ const commands = [
   </Dialog>
 
   <script>
+    (() => {
+      const adminWindow = window as Window & { __tosderAdminShellBound?: boolean };
+      let cleanup = () => {};
+
+      const initAdminShell = () => {
+        const readyShell = document.querySelector<HTMLElement>('.admin-shell');
+        if (!readyShell || readyShell.dataset.adminReady === 'true') return;
+        readyShell.dataset.adminReady = 'true';
+
+        cleanup();
+        const controller = new AbortController();
+        cleanup = () => controller.abort();
+
     const shell = document.querySelector<HTMLElement>('.admin-shell');
     const sidebar = document.querySelector<HTMLElement>('#admin-sidebar');
     const collapseButton = document.querySelector<HTMLElement>('[data-sidebar-collapse]');
@@ -522,14 +535,23 @@ const commands = [
         }
         lastG = 0;
       }
-    });
+    }, { signal: controller.signal });
 
     document.addEventListener('click', (event) => {
       const target = event.target as Node;
       document.querySelectorAll<HTMLDetailsElement>('details.account[open]').forEach((details) => {
         if (!details.contains(target)) details.open = false;
       });
-    });
+    }, { signal: controller.signal });
+
+      };
+
+      if (!adminWindow.__tosderAdminShellBound) {
+        adminWindow.__tosderAdminShellBound = true;
+        document.addEventListener('astro:page-load', initAdminShell);
+        initAdminShell();
+      }
+    })();
   </script>
 
   <style>

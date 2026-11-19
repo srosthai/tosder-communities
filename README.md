@@ -81,6 +81,7 @@ The `todos` table is a smoke test, not part of the final domain model.
 - [Legal and compliance](./docs/legal.md)
 - [Editorial review and sign-off](./docs/editorial-review.md)
 - [Email and verification](./docs/email.md)
+- [Production accounts](./docs/accounts.md)
 - [Object storage and photo uploads](./docs/storage.md)
 - [Backup, restore, and migration rollback](./docs/backup.md)
 - [Quality budgets](./docs/quality-budgets.md)
